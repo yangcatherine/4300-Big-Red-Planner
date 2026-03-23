@@ -98,15 +98,22 @@ def register_routes(app):
             return jsonify([])
         catalog = _load_catalog()
         q_lower = q.lower()
-        matches = []
+
+        by_prefix = [] 
+        by_cid = []
+        by_title = []
+        
         for c in catalog:
             cid = (c.get("course_id") or "").lower()
             title = (c.get("title") or "").lower()
-            if q_lower in cid or q_lower in title:
-                matches.append(_course_to_suggestion(c))
-            if len(matches) >= 20:
-                break
-        return jsonify(matches)
+            if cid.startswith(q_lower) or cid.startswith(q_lower + " "):
+                by_prefix.append(_course_to_suggestion(c))
+            elif q_lower in cid:
+                by_cid.append(_course_to_suggestion(c))
+            elif q_lower in title and len(by_prefix) + len(by_cid) + len(by_title) < 20:
+                by_title.append(_course_to_suggestion(c))
+        matches = by_prefix + by_cid + by_title[: 20 - len(by_prefix) - len(by_cid)]
+        return jsonify(matches[:20])
 
     @app.route("/api/schedules", methods=["POST"])
     def generate_schedules_api():
