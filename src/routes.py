@@ -82,14 +82,6 @@ def json_search(query):
 
 
 def register_routes(app):
-    @app.route('/', defaults={'path': ''})
-    @app.route('/<path:path>')
-    def serve(path):
-        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-            return send_from_directory(app.static_folder, path)
-        else:
-            return send_from_directory(app.static_folder, 'index.html')
-
     @app.route("/api/config")
     def config():
         return jsonify({"use_llm": USE_LLM})
@@ -177,3 +169,10 @@ def register_routes(app):
     if USE_LLM:
         from llm_routes import register_chat_route
         register_chat_route(app, json_search)
+
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve(path):
+        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+            return send_from_directory(app.static_folder, path)
+        return send_from_directory(app.static_folder, 'index.html')
