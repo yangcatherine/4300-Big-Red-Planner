@@ -1,5 +1,5 @@
 """
-Routes: React app serving and episode search API.
+Routes: React app serving, course search, schedule generation, and episode search API.
 
 To enable AI chat, set USE_LLM = True below. See llm_routes.py for AI code.
 """
@@ -12,6 +12,55 @@ from models import db, Episode, Review
 USE_LLM = False
 # USE_LLM = True
 # ─────────────────────────────────────────────────────────────────────────────
+
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(_current_dir)
+_catalog_path = os.path.join(_project_root, "data", "cornell_FA25_courses.json")
+_ratings_path = os.path.join(_project_root, "data", "ratings.jsonl")
+
+
+def _load_catalog():
+    """Load course catalog from JSON."""
+    with open(_catalog_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _course_to_suggestion(course: dict) -> dict:
+    """Convert full course dict to CourseSuggestion format."""
+    return {
+        "course_id": course.get("course_id", ""),
+        "title": course.get("title", ""),
+        "credits": course.get("credits_min", course.get("credits_max", 0)),
+        "distributions": course.get("distribution_requirements", []),
+    }
+
+
+def _course_to_schedule_course(course: dict) -> dict:
+    """Convert full course dict to ScheduleCourse format."""
+    instructors = []
+    seen = set()
+    meetings = []
+    for sec in course.get("sections", []):
+        sec_type = sec.get("type", "UNT")
+        for inst in sec.get("instructors", []):
+            if inst and inst not in seen:
+                seen.add(inst)
+                instructors.append(inst)
+        for m in sec.get("meetings", []):
+            meetings.append({
+                "type": sec_type,
+                "days": m.get("days", ""),
+                "start": m.get("start", ""),
+                "end": m.get("end", ""),
+            })
+    return {
+        "course_id": course.get("course_id", ""),
+        "title": course.get("title", ""),
+        "credits": course.get("credits_min", course.get("credits_max", 0)),
+        "distributions": course.get("distribution_requirements", []),
+        "instructors": instructors,
+        "meetings": meetings,
+    }
 
 
 def json_search(query):
@@ -49,6 +98,81 @@ def register_routes(app):
     def episodes_search():
         text = request.args.get("title", "")
         return jsonify(json_search(text))
+
+    @app.route("/api/courses/search")
+    def courses_search():
+        q = request.args.get("q", "").strip()
+        if len(q) < 2:
+            return jsonify([])
+        catalog = _load_catalog()
+        q_lower = q.lower()
+        matches = []
+        for c in catalog:
+            cid = (c.get("course_id") or "").lower()
+            title = (c.get("title") or "").lower()
+            if q_lower in cid or q_lower in title:
+                matches.append(_course_to_suggestion(c))
+            if len(matches) >= 20:
+                break
+        return jsonify(matches)
+
+    @app.route("/api/schedules", methods=["POST"])
+    def generate_schedules_api():
+        try:
+            body = request.get_json() or {}
+            required_ids = body.get("required_course_ids", [])
+            distributions = body.get("distributions", [])
+            query = body.get("query", "")
+            top_n = body.get("top_n", 10)
+
+            if len(required_ids) < 2:
+                return jsonify({"error": "Add at least 2 required courses."}), 400
+
+            catalog = _load_catalog()
+            id_to_course = {c["course_id"]: c for c in catalog}
+            required = [id_to_course[cid] for cid in required_ids if cid in id_to_course]
+            if len(required) < 2:
+                return jsonify({"error": "Could not find valid required courses."}), 400
+
+            from schedule_generator import generate_schedules
+
+            raw_schedules = generate_schedules(
+                required, distributions, catalog=catalog, excluded_courses=[]
+            )
+
+            ranked_pairs = []
+            if os.path.exists(_ratings_path):
+                try:
+                    from score_schedule import rank_schedules_with_scores, load_professors
+                    df, prof_dict, vectorizer, tfidf_matrix = load_professors(_ratings_path)
+                    ranked_pairs = rank_schedules_with_scores(
+                        raw_schedules, df, prof_dict, vectorizer, tfidf_matrix, query
+                    )
+                except Exception:
+                    ranked_pairs = [(0.5, s) for s in raw_schedules]
+            else:
+                ranked_pairs = [(0.5, s) for s in raw_schedules]
+
+            def _total_credits(sched):
+                return sum(c.get("credits_min", c.get("credits_max", 0)) for c in sched)
+
+            schedules = []
+            for i, (score, sched) in enumerate(ranked_pairs[:top_n], 1):
+                schedules.append({
+                    "rank": i,
+                    "score": score,
+                    "total_credits": _total_credits(sched),
+                    "courses": [_course_to_schedule_course(c) for c in sched],
+                })
+
+            return jsonify({
+                "schedules": schedules,
+                "total": len(raw_schedules),
+            })
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     if USE_LLM:
         from llm_routes import register_chat_route
