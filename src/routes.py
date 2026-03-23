@@ -102,7 +102,7 @@ def register_routes(app):
         by_prefix = [] 
         by_cid = []
         by_title = []
-        
+
         for c in catalog:
             cid = (c.get("course_id") or "").lower()
             title = (c.get("title") or "").lower()
@@ -136,7 +136,8 @@ def register_routes(app):
             from schedule_generator import generate_schedules
 
             raw_schedules = generate_schedules(
-                required, distributions, catalog=catalog, excluded_courses=[]
+                required, distributions, catalog=catalog, excluded_courses=[],
+                max_results=300,
             )
 
             ranked_pairs = []

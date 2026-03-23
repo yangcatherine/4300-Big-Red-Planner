@@ -178,9 +178,10 @@ def generate_schedules(
     catalog: Optional[list] = None,
     catalog_path: Optional[str] = None,
     excluded_courses: Optional[list] = None,
+    max_results: Optional[int] = None,
 ) -> List[list]:
     """
-    Generate all valid course schedules that add courses satisfying the desired
+    Generate valid course schedules that add courses satisfying the desired
     distributions without overlapping with required courses or with each other.
 
     Args:
@@ -190,6 +191,7 @@ def generate_schedules(
         catalog_path: Path to JSON file with courses.
         excluded_courses: Courses already taken. Can be a list of course dicts or course
                           ID strings. These will not be added to any schedule.
+        max_results: If set, stop searching after finding this many valid schedules.
 
     Returns:
         List of valid schedules. Each schedule is a list of course dicts.
@@ -235,6 +237,7 @@ def generate_schedules(
     # Add courses from allowed distributions
     allowed_dists = set(distributions)
     results: list[list[dict]] = []
+    limit = max_results if max_results is not None else 500
 
     def backtrack(
         current_schedule: list[dict],
@@ -242,12 +245,16 @@ def generate_schedules(
         used_course_ids: set[str],
         min_course_id: str,
     ) -> None:
+        if len(results) >= limit:
+            return
         if _total_credits(current_schedule) >= 12:
             results.append(current_schedule.copy())
         candidates = _get_courses_from_allowed_distributions(
             catalog, allowed_dists, used_course_ids
         )
         for course in candidates:
+            if len(results) >= limit:
+                return
             cid = course.get("course_id", "")
             if cid <= min_course_id:
                 continue
