@@ -2,22 +2,15 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
-# Define Episode model
-class Episode(db.Model):
-    __tablename__ = 'episodes'
+class Professor(db.Model):
+    __tablename__ = 'professors'
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(64), nullable=False)
-    descr = db.Column(db.String(1024), nullable=False)
-    
-    def __repr__(self):
-        return f'Episode {self.id}: {self.title}'
+    name = db.Column(db.String(128), nullable=False)
+    department = db.Column(db.String(128), nullable=False)
+    rating = db.Column(db.Float, nullable=False)
+    difficulty = db.Column(db.Float, nullable=False)
+    num_ratings = db.Column(db.Integer, nullable=False)
+    review = db.Column(db.Text, nullable=False)
 
-# Define Review model
-class Review(db.Model):
-    __tablename__ = 'reviews'
-    id = db.Column(db.Integer, primary_key=True)
-    imdb_rating = db.Column(db.Float, nullable=False)
-    
     def __repr__(self):
-        return f'Review {self.id}: {self.imdb_rating}'
-
+        return f'Professor {self.id}: {self.name}'

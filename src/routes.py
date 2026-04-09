@@ -3,14 +3,14 @@ Routes: React app serving, course search, schedule generation, and episode searc
 
 To enable AI chat, set USE_LLM = True below. See llm_routes.py for AI code.
 """
-import json
 import os
-from flask import send_from_directory, request, jsonify
-from models import db, Episode, Review
+from flask import send_from_directory, request, jsonify, current_app
+from sklearn.metrics.pairwise import cosine_similarity
+from models import db, Professor
+from schedule_generator import generate_schedules
 
 # ── AI toggle ────────────────────────────────────────────────────────────────
 USE_LLM = False
-# USE_LLM = True
 # ─────────────────────────────────────────────────────────────────────────────
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))

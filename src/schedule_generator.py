@@ -130,7 +130,7 @@ def generate_schedules(
     catalog: Optional[list] = None,
     catalog_path: Optional[str] = None,
     excluded_courses: Optional[list] = None,
-    max_results: Optional[int] = None,
+    max_results: int = 500,
 ) -> List[list]:
     """
     Generate valid course schedules that add courses satisfying the desired
@@ -143,7 +143,7 @@ def generate_schedules(
         catalog_path: Path to JSON file with courses.
         excluded_courses: Courses already taken. Can be a list of course dicts or course
                           ID strings. These will not be added to any schedule.
-        max_results: Optional requested result limit. Generation is always capped at 250.
+        max_results: Stop searching after this many valid schedules are found.
 
     Returns:
         List of valid schedules. Each schedule is a list of course dicts.
@@ -202,16 +202,18 @@ def generate_schedules(
         used_course_ids: set[str],
         min_course_id: str,
     ) -> None:
-        if len(results) >= limit:
+        if len(results) >= max_results:
             return
         if _total_credits(current_schedule) >= 12:
             results.append(current_schedule.copy())
+            if len(results) >= max_results:
+                return
         candidates = _get_courses_from_allowed_distributions(
             catalog, allowed_dists, used_course_ids
         )
         rng.shuffle(candidates)
         for course in candidates:
-            if len(results) >= limit:
+            if len(results) >= max_results:
                 return
             cid = course.get("course_id", "")
             if cid <= min_course_id:
