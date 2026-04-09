@@ -3,11 +3,13 @@ Finds all valid course schedules that add distribution-fulfilling courses
 without time conflicts with required courses or with each other.
 """
 
+import random
 from itertools import product
 from typing import Optional, List
 
 
 DAY_MAP = {"M": 0, "T": 1, "W": 2, "R": 3, "F": 4}
+MAX_GENERATED_SCHEDULES = 250
 
 
 def _parse_days(days_str: str) -> set[int]:
@@ -97,66 +99,9 @@ def _schedules_overlap(meetings_a: list[dict], meetings_b: list[dict]) -> bool:
     return False
 
 
-def _course_meetings_overlap(
-    course: dict, existing_meetings: list[dict], section_combo: Optional[list] = None
-) -> bool:
-    """Check if a course overlaps with existing meetings."""
-    if section_combo is not None:
-        meetings = _meetings_from_section_combo(section_combo)
-    else:
-        for combo in _get_section_combinations(course):
-            if not _schedules_overlap(
-                _meetings_from_section_combo(combo), existing_meetings
-            ):
-                return False
-        return True
-    return _schedules_overlap(meetings, existing_meetings)
-
-
-def _collect_meetings_from_courses(
-    courses: list[dict], section_assignments: Optional[dict] = None
-) -> list[dict]:
-    """Get all meetings from a list of courses with optional section assignments."""
-    all_meetings = []
-    for course in courses:
-        cid = course.get("course_id", "")
-        if section_assignments and cid in section_assignments:
-            combo = section_assignments[cid]
-            all_meetings.extend(_meetings_from_section_combo(combo))
-        else:
-            for combo in _get_section_combinations(course):
-                all_meetings.extend(_meetings_from_section_combo(combo))
-                break
-    return all_meetings
-
-
-def _courses_satisfy_distributions(
-    courses: list[dict], distributions: list[str]
-) -> bool:
-    """Check if the set of courses satisfies all required distributions."""
-    satisfied = set()
-    for course in courses:
-        for d in course.get("distribution_requirements", []):
-            if d in distributions:
-                satisfied.add(d)
-    return satisfied >= set(distributions)
-
-
 def _total_credits(courses: list[dict]) -> int:
     """Sum credits_max for all courses in a schedule."""
     return sum(c.get("credits_max", c.get("credits_min", 0)) for c in courses)
-
-
-def _get_courses_for_distribution(
-    catalog: list[dict], distribution: str, exclude_ids: set[str]
-) -> list[dict]:
-    """Get all catalog courses that satisfy a distribution, excluding some course IDs."""
-    return [
-        c
-        for c in catalog
-        if c.get("course_id") not in exclude_ids
-        and distribution in c.get("distribution_requirements", [])
-    ]
 
 
 def _get_courses_from_allowed_distributions(
@@ -170,6 +115,12 @@ def _get_courses_from_allowed_distributions(
         and (dists := set(c.get("distribution_requirements", [])))
         and dists <= allowed_dists
     ]
+
+
+def _stable_seed(parts: list[str]) -> int:
+    """Build a seed from stable string parts."""
+    joined = "|".join(parts)
+    return sum((i + 1) * ord(ch) for i, ch in enumerate(joined))
 
 
 def generate_schedules(
@@ -191,7 +142,7 @@ def generate_schedules(
         catalog_path: Path to JSON file with courses.
         excluded_courses: Courses already taken. Can be a list of course dicts or course
                           ID strings. These will not be added to any schedule.
-        max_results: If set, stop searching after finding this many valid schedules.
+        max_results: Optional requested result limit. Generation is always capped at 250.
 
     Returns:
         List of valid schedules. Each schedule is a list of course dicts.
@@ -237,7 +188,12 @@ def generate_schedules(
     # Add courses from allowed distributions
     allowed_dists = set(distributions)
     results: list[list[dict]] = []
-    limit = max_results if max_results is not None else 500
+    if max_results is None:
+        limit = MAX_GENERATED_SCHEDULES
+    else:
+        limit = min(max_results, MAX_GENERATED_SCHEDULES)
+    seed_parts = sorted(required_ids) + sorted(allowed_dists)
+    rng = random.Random(_stable_seed(seed_parts))
 
     def backtrack(
         current_schedule: list[dict],
@@ -252,6 +208,7 @@ def generate_schedules(
         candidates = _get_courses_from_allowed_distributions(
             catalog, allowed_dists, used_course_ids
         )
+        rng.shuffle(candidates)
         for course in candidates:
             if len(results) >= limit:
                 return
@@ -285,5 +242,8 @@ def generate_schedules(
         if key not in seen:
             seen.add(key)
             unique.append(sched)
+
+    # Mix output order
+    random.Random(_stable_seed(seed_parts)).shuffle(unique)
 
     return unique
