@@ -107,13 +107,14 @@ def _total_credits(courses: list[dict]) -> int:
 def _get_courses_from_allowed_distributions(
     catalog: list[dict], allowed_dists: set[str], exclude_ids: set[str]
 ) -> list[dict]:
-    """Get courses whose distributions are only from the allowed set."""
+    """Get courses with no prereqs and whose distributions are only from the allowed set."""
     return [
         c
         for c in catalog
         if c.get("course_id") not in exclude_ids
         and (dists := set(c.get("distribution_requirements", [])))
         and dists <= allowed_dists
+        and not (c.get("prerequisites_raw", "") or "").strip()
     ]
 
 
