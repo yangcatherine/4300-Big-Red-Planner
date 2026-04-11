@@ -21,9 +21,38 @@ export interface ScheduleCourse {
   meetings: ScheduleMeeting[];
 }
 
+export interface ScheduleCourseScoreBreakdown {
+  course_id: string;
+  title: string;
+  score: number;
+  matched_professors: number;
+  explanation: string;
+}
+
+export interface ScheduleScoreBreakdown {
+  weights: {
+    similarity: number;
+    rating: number;
+    difficulty: number;
+  };
+  components: {
+    similarity: number;
+    rating: number;
+    difficulty: number;
+  };
+  weighted_components: {
+    similarity: number;
+    rating: number;
+    difficulty: number;
+  };
+  explanation: string;
+  course_breakdown: ScheduleCourseScoreBreakdown[];
+}
+
 export interface Schedule {
   rank: number;
   score: number;
   total_credits: number;
   courses: ScheduleCourse[];
+  score_breakdown?: ScheduleScoreBreakdown;
 }

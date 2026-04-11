@@ -3,46 +3,71 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import json
+import os
 
 def clean_name(name):
     if not isinstance(name, str):
         return ""
     return name.strip().lower().replace(".", "")
 
-def load_professors(jsonl_path):
+def load_professors(data_path):
     records = []
 
-    with open(jsonl_path, "r", encoding="utf-8") as f:
-        for line in f:
-            record = json.loads(line)
-
-            name = record.get("name", "")
-            department = record.get("department", "")
-            rating = record.get("rating", 0)
-            difficulty = record.get("difficulty", 0)
-            num_ratings = record.get("num_ratings", 0)
-
-            # Combine review comments into one string
-            reviews = []
-            for r in record.get("ratings", []):
-                comment = r.get("comment", "")
-                if comment:
-                    reviews.append(comment)
-
-            combined_reviews = " ".join(reviews)
-
+    is_csv = data_path.lower().endswith(".csv")
+    if is_csv:
+        csv_df = pd.read_csv(data_path)
+        for _, row in csv_df.iterrows():
+            name = row.get("Professor", "")
+            department = row.get("Department", "")
+            rating = row.get("Rating", 0)
+            difficulty = row.get("Difficulty", 0)
+            num_ratings = row.get("Num_Ratings", 0)
+            review_text = row.get("Review_Text", row.get("Review_Example", ""))
             records.append({
-                "Professor": name,
-                "Department": department,
-                "Rating": float(rating) if rating else 0.0,
-                "Difficulty": float(difficulty) if difficulty else 0.0,
-                "Num_Ratings": int(num_ratings) if num_ratings else 0,
-                "Review_Text": combined_reviews
+                "Professor": str(name) if pd.notna(name) else "",
+                "Department": str(department) if pd.notna(department) else "",
+                "Rating": float(rating) if pd.notna(rating) else 0.0,
+                "Difficulty": float(difficulty) if pd.notna(difficulty) else 0.0,
+                "Num_Ratings": int(num_ratings) if pd.notna(num_ratings) else 0,
+                "Review_Text": str(review_text) if pd.notna(review_text) else "",
             })
+    else:
+        with open(data_path, "r", encoding="utf-8") as f:
+            for line in f:
+                record = json.loads(line)
+
+                name = record.get("name", "")
+                department = record.get("department", "")
+                rating = record.get("rating", 0)
+                difficulty = record.get("difficulty", 0)
+                num_ratings = record.get("num_ratings", 0)
+
+                reviews = []
+                for r in record.get("ratings", []):
+                    comment = r.get("comment", "")
+                    if comment:
+                        reviews.append(comment)
+
+                combined_reviews = " ".join(reviews)
+
+                records.append({
+                    "Professor": name,
+                    "Department": department,
+                    "Rating": float(rating) if rating else 0.0,
+                    "Difficulty": float(difficulty) if difficulty else 0.0,
+                    "Num_Ratings": int(num_ratings) if num_ratings else 0,
+                    "Review_Text": combined_reviews
+                })
     df = pd.DataFrame(records)
+    if df.empty:
+        raise ValueError(f"No professor records found in {data_path}")
+
     df["clean_name"] = df["Professor"].apply(clean_name)
 
     df["Review_Text"] = df["Review_Text"].fillna("")
+    if (df["Review_Text"].str.strip() == "").all():
+        # Avoid empty TF-IDF vocabulary by providing minimal text.
+        df["Review_Text"] = df["Professor"].fillna("").astype(str)
 
     vectorizer = TfidfVectorizer(stop_words='english')
     tfidf_matrix = vectorizer.fit_transform(df["Review_Text"])
