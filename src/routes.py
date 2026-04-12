@@ -10,6 +10,8 @@ from flask import send_from_directory, request, jsonify, current_app
 from sklearn.metrics.pairwise import cosine_similarity
 from models import db, Professor
 from schedule_generator import generate_schedules
+from score_schedule import rank_schedules_with_scores, load_professors, clean_name, get_course_instructors
+import pandas as pd
 
 # ── AI toggle ────────────────────────────────────────────────────────────────
 USE_LLM = False
@@ -350,6 +352,7 @@ def register_routes(app):
                 "rating": body.get("w_rating", _DEFAULT_WEIGHTS["rating"]),
                 "difficulty": body.get("w_difficulty", _DEFAULT_WEIGHTS["difficulty"]),
             })
+            difficulty_filter = body.get("difficulty_filter", None) 
 
             if len(required_ids) < 2:
                 return jsonify({"error": "Add at least 2 required courses."}), 400
@@ -438,6 +441,31 @@ def register_routes(app):
                     })
 
             ranked_rows.sort(key=lambda x: x["score"], reverse=True)
+
+            # difficulty filter
+            if difficulty_filter:
+                def avg_difficulty(row):
+                    diffs = []
+                    for course in row["courses"]:
+                        for inst in course.get("instructors", []):
+                            idx = prof_dict.get(clean_name(inst))
+                            if idx is not None:
+                                d = df.iloc[idx]["Difficulty"]
+                                if not pd.isna(d):
+                                    diffs.append(d)
+                    return sum(diffs) / len(diffs) if diffs else 2.5
+
+                def difficulty_matches(row):
+                    avg = avg_difficulty(row)
+                    if difficulty_filter == "easy":
+                        return avg < 2.5
+                    elif difficulty_filter == "medium":
+                        return 2.5 <= avg <= 3.5
+                    elif difficulty_filter == "hard":
+                        return avg > 3.5
+                    return True
+
+                ranked_rows = [row for row in ranked_rows if difficulty_matches(row)]
 
             def _total_credits(sched):
                 return sum(c.get("credits_min", c.get("credits_max", 0)) for c in sched)
