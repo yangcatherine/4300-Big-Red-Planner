@@ -359,11 +359,6 @@ def register_routes(app):
             required = [id_to_course[cid] for cid in required_ids if cid in id_to_course]
             if len(required) < 2:
                 return jsonify({"error": "Could not find valid required courses."}), 400
-            
-            if required courses overlap: 
-                return jsonify({"error": "Required courses have overlapping meeting times."}), 400
-
-            from schedule_generator import generate_schedules
 
             raw_schedules = generate_schedules(
                 required, distributions, catalog=catalog, excluded_courses=[],

@@ -185,6 +185,8 @@ def generate_schedules(
     required_meetings = []
     for c in required_courses:
         required_meetings.extend(get_blocked_meetings(c))
+    if _schedules_overlap(required_meetings, required_meetings):
+        raise ValueError("Required courses have overlapping meeting times.")
 
     # Add courses from allowed distributions
     allowed_dists = set(distributions)
