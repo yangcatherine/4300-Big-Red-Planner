@@ -3,12 +3,18 @@ Routes: React app serving, course search, schedule generation, and episode searc
 
 To enable AI chat, set USE_LLM = True below. See llm_routes.py for AI code.
 """
+
 import os
 import json
 from itertools import product
 from flask import send_from_directory, request, jsonify, current_app
 from sklearn.metrics.pairwise import cosine_similarity
 from models import db, Professor
+try:
+    from models import Episode, Review
+except ImportError:
+    Episode = None
+    Review = None
 from schedule_generator import generate_schedules
 from score_schedule import rank_schedules_with_scores, load_professors, clean_name, get_course_instructors
 import pandas as pd
@@ -22,7 +28,9 @@ _project_root = os.path.dirname(_current_dir)
 _catalog_path = os.path.join(_project_root, "data", "cornell_FA25_courses.json")
 _ratings_jsonl_path = os.path.join(_project_root, "data", "ratings.jsonl")
 _ratings_csv_path = os.path.join(_project_root, "data", "cornell_ratings_data.csv")
-_ratings_path = _ratings_jsonl_path if os.path.exists(_ratings_jsonl_path) else _ratings_csv_path
+_ratings_path = (
+    _ratings_jsonl_path if os.path.exists(_ratings_jsonl_path) else _ratings_csv_path
+)
 _DAY_MAP = {"M": 0, "T": 1, "W": 2, "R": 3, "F": 4}
 _DEFAULT_WEIGHTS = {"similarity": 0.5, "rating": 0.3, "difficulty": 0.2}
 
@@ -86,12 +94,14 @@ def _section_meetings(section: dict) -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
-        out.append({
-            "type": sec_type,
-            "days": m.get("days", ""),
-            "start": m.get("start", ""),
-            "end": m.get("end", ""),
-        })
+        out.append(
+            {
+                "type": sec_type,
+                "days": m.get("days", ""),
+                "start": m.get("start", ""),
+                "end": m.get("end", ""),
+            }
+        )
     return out
 
 
@@ -136,12 +146,18 @@ def _choose_non_overlapping_sections(schedule_courses: list[dict]) -> dict:
     return {c.get("course_id", ""): [] for c in schedule_courses}
 
 
-def _course_to_schedule_course(course: dict, selected_sections: list[dict] | None = None) -> dict:
+def _course_to_schedule_course(
+    course: dict, selected_sections: list[dict] | None = None
+) -> dict:
     """Convert full course dict to ScheduleCourse format."""
     instructors = []
     seen = set()
     meetings = []
-    sections = selected_sections if selected_sections is not None else course.get("sections", [])
+    sections = (
+        selected_sections
+        if selected_sections is not None
+        else course.get("sections", [])
+    )
     for sec in sections:
         sec_type = sec.get("type", "UNT")
         for inst in sec.get("instructors", []):
@@ -177,9 +193,13 @@ def _safe_weight(value, fallback: float) -> float:
 
 def _normalize_weights(raw_weights: dict) -> dict:
     weights = {
-        "similarity": _safe_weight(raw_weights.get("similarity"), _DEFAULT_WEIGHTS["similarity"]),
+        "similarity": _safe_weight(
+            raw_weights.get("similarity"), _DEFAULT_WEIGHTS["similarity"]
+        ),
         "rating": _safe_weight(raw_weights.get("rating"), _DEFAULT_WEIGHTS["rating"]),
-        "difficulty": _safe_weight(raw_weights.get("difficulty"), _DEFAULT_WEIGHTS["difficulty"]),
+        "difficulty": _safe_weight(
+            raw_weights.get("difficulty"), _DEFAULT_WEIGHTS["difficulty"]
+        ),
     }
     total = sum(weights.values())
     if total <= 0:
@@ -187,14 +207,90 @@ def _normalize_weights(raw_weights: dict) -> dict:
     return {k: v / total for k, v in weights.items()}
 
 
-def _score_schedule_with_breakdown(
-    schedule_courses: list[dict], df, prof_dict: dict, vectorizer, tfidf_matrix, query: str, weights: dict
+def _coerce_bool(value, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _required_courses_overlap(courses: list[dict]) -> bool:
+    occupied = []
+    for course in courses:
+        course_meetings = []
+        for sec in course.get("sections", []):
+            course_meetings.extend(_section_meetings(sec))
+        if _meetings_conflict_with_any(course_meetings, occupied):
+            return True
+        occupied.extend(course_meetings)
+    return False
+
+
+def _latent_explainability(
+    query_latent, matched_latents, dimension_terms, top_k: int = 3
 ):
-    query_vec = vectorizer.transform([query or ""])
+    if query_latent is None or not matched_latents:
+        return None
+    schedule_latent = [sum(values) / len(values) for values in zip(*matched_latents)]
+    contributions = [
+        q_val * s_val for q_val, s_val in zip(query_latent, schedule_latent)
+    ]
+    if not contributions:
+        return None
+
+    pos_idx = [
+        i
+        for i in sorted(
+            range(len(contributions)), key=lambda idx: contributions[idx], reverse=True
+        )
+        if contributions[i] > 0
+    ][:top_k]
+    neg_idx = [
+        i
+        for i in sorted(range(len(contributions)), key=lambda idx: contributions[idx])
+        if contributions[i] < 0
+    ][:top_k]
+
+    def _pack(idx: int) -> dict:
+        terms = (
+            dimension_terms[idx]
+            if dimension_terms and idx < len(dimension_terms)
+            else {"top_positive_terms": [], "top_negative_terms": []}
+        )
+        return {
+            "dimension": int(idx),
+            "query_activation": float(query_latent[idx]),
+            "schedule_activation": float(schedule_latent[idx]),
+            "contribution": float(contributions[idx]),
+            "top_positive_terms": terms.get("top_positive_terms", []),
+            "top_negative_terms": terms.get("top_negative_terms", []),
+        }
+
+    return {
+        "positive_dimensions": [_pack(i) for i in pos_idx],
+        "negative_dimensions": [_pack(i) for i in neg_idx],
+    }
+
+
+def _score_schedule_with_breakdown(
+    schedule_courses: list[dict],
+    df,
+    prof_dict: dict,
+    tfidf_matrix,
+    query_vec,
+    weights: dict,
+    use_svd: bool = False,
+    svd_data: dict | None = None,
+    query_latent=None,
+):
     course_breakdown = []
     sim_values = []
     rating_values = []
     difficulty_values = []
+    matched_latents = []
 
     for course in schedule_courses:
         instructor_components = []
@@ -208,25 +304,43 @@ def _score_schedule_with_breakdown(
             num_ratings = int(row.get("Num_Ratings", 0) or 0)
             if num_ratings <= 0:
                 continue
-            sim = cosine_similarity(query_vec, tfidf_matrix[prof_idx])[0][0]
+            if use_svd and svd_data and query_latent is not None:
+                prof_latent = svd_data["prof_latent"][prof_idx]
+                sim = cosine_similarity(
+                    query_latent.reshape(1, -1),
+                    prof_latent.reshape(1, -1),
+                )[0][0]
+                matched_latents.append(prof_latent)
+            else:
+                sim = cosine_similarity(query_vec, tfidf_matrix[prof_idx])[0][0]
             rating_norm = rating / 5.0
             difficulty_norm = difficulty / 5.0
-            instructor_components.append({
-                "sim": sim,
-                "rating": rating_norm,
-                "difficulty": difficulty_norm,
-                "score": (
-                    weights["similarity"] * sim
-                    + weights["rating"] * rating_norm
-                    + weights["difficulty"] * difficulty_norm
-                ),
-            })
+            instructor_components.append(
+                {
+                    "sim": sim,
+                    "rating": rating_norm,
+                    "difficulty": difficulty_norm,
+                    "score": (
+                        weights["similarity"] * sim
+                        + weights["rating"] * rating_norm
+                        + weights["difficulty"] * difficulty_norm
+                    ),
+                }
+            )
 
         if instructor_components:
-            avg_sim = sum(x["sim"] for x in instructor_components) / len(instructor_components)
-            avg_rating = sum(x["rating"] for x in instructor_components) / len(instructor_components)
-            avg_difficulty = sum(x["difficulty"] for x in instructor_components) / len(instructor_components)
-            course_score = sum(x["score"] for x in instructor_components) / len(instructor_components)
+            avg_sim = sum(x["sim"] for x in instructor_components) / len(
+                instructor_components
+            )
+            avg_rating = sum(x["rating"] for x in instructor_components) / len(
+                instructor_components
+            )
+            avg_difficulty = sum(x["difficulty"] for x in instructor_components) / len(
+                instructor_components
+            )
+            course_score = sum(x["score"] for x in instructor_components) / len(
+                instructor_components
+            )
             explanation = (
                 f"Matched {len(instructor_components)} instructor(s) with reviews "
                 f"for this course section choice."
@@ -236,26 +350,36 @@ def _score_schedule_with_breakdown(
             avg_rating = 0.0
             avg_difficulty = 0.0
             course_score = 0.0
-            explanation = "No instructor review data matched; this course contributes 0.00."
+            explanation = (
+                "No instructor review data matched; this course contributes 0.00."
+            )
 
         sim_values.append(avg_sim)
         rating_values.append(avg_rating)
         difficulty_values.append(avg_difficulty)
-        course_breakdown.append({
-            "course_id": course.get("course_id", ""),
-            "title": course.get("title", ""),
-            "score": course_score,
-            "matched_professors": len(instructor_components),
-            "explanation": explanation,
-        })
+        course_breakdown.append(
+            {
+                "course_id": course.get("course_id", ""),
+                "title": course.get("title", ""),
+                "score": course_score,
+                "matched_professors": len(instructor_components),
+                "explanation": explanation,
+            }
+        )
 
     if not course_breakdown:
         return 0.0, {
+            "search_method": "svd" if use_svd else "tfidf",
             "weights": weights,
             "components": {"similarity": 0.0, "rating": 0.0, "difficulty": 0.0},
-            "weighted_components": {"similarity": 0.0, "rating": 0.0, "difficulty": 0.0},
+            "weighted_components": {
+                "similarity": 0.0,
+                "rating": 0.0,
+                "difficulty": 0.0,
+            },
             "explanation": "No scorable courses were found in this schedule.",
             "course_breakdown": [],
+            "latent_explainability": None,
         }
 
     comp_sim = sum(sim_values) / len(sim_values)
@@ -268,9 +392,11 @@ def _score_schedule_with_breakdown(
     }
     schedule_score = (
         sum(c["score"] for c in course_breakdown) / len(course_breakdown)
-        if course_breakdown else 0.0
+        if course_breakdown
+        else 0.0
     )
     breakdown = {
+        "search_method": "svd" if use_svd else "tfidf",
         "weights": weights,
         "components": {
             "similarity": comp_sim,
@@ -283,6 +409,15 @@ def _score_schedule_with_breakdown(
             "review similarity, rating, and difficulty using your selected weights."
         ),
         "course_breakdown": course_breakdown,
+        "latent_explainability": (
+            _latent_explainability(
+                query_latent,
+                matched_latents,
+                (svd_data or {}).get("dimension_terms", []),
+            )
+            if use_svd
+            else None
+        ),
     }
     return schedule_score, breakdown
 
@@ -290,18 +425,23 @@ def _score_schedule_with_breakdown(
 def json_search(query):
     if not query or not query.strip():
         query = "Kardashian"
-    results = db.session.query(Episode, Review).join(
-        Review, Episode.id == Review.id
-    ).filter(
-        Episode.title.ilike(f'%{query}%')
-    ).all()
+    if Episode is None or Review is None:
+        return []
+    results = (
+        db.session.query(Episode, Review)
+        .join(Review, Episode.id == Review.id)
+        .filter(Episode.title.ilike(f"%{query}%"))
+        .all()
+    )
     matches = []
     for episode, review in results:
-        matches.append({
-            'title': episode.title,
-            'descr': episode.descr,
-            'imdb_rating': review.imdb_rating
-        })
+        matches.append(
+            {
+                "title": episode.title,
+                "descr": episode.descr,
+                "imdb_rating": review.imdb_rating,
+            }
+        )
     return matches
 
 
@@ -323,7 +463,7 @@ def register_routes(app):
         catalog = _load_catalog()
         q_lower = q.lower()
 
-        by_prefix = [] 
+        by_prefix = []
         by_cid = []
         by_title = []
 
@@ -347,24 +487,44 @@ def register_routes(app):
             distributions = body.get("distributions", [])
             query = body.get("query", "")
             top_n = body.get("top_n", 10)
-            normalized_weights = _normalize_weights({
-                "similarity": body.get("w_sim", _DEFAULT_WEIGHTS["similarity"]),
-                "rating": body.get("w_rating", _DEFAULT_WEIGHTS["rating"]),
-                "difficulty": body.get("w_difficulty", _DEFAULT_WEIGHTS["difficulty"]),
-            })
-            difficulty_filter = body.get("difficulty_filter", None) 
+            use_svd = _coerce_bool(body.get("use_svd"), default=True)
+            svd_components = int(body.get("svd_components", 64) or 64)
+            normalized_weights = _normalize_weights(
+                {
+                    "similarity": body.get("w_sim", _DEFAULT_WEIGHTS["similarity"]),
+                    "rating": body.get("w_rating", _DEFAULT_WEIGHTS["rating"]),
+                    "difficulty": body.get(
+                        "w_difficulty", _DEFAULT_WEIGHTS["difficulty"]
+                    ),
+                }
+            )
 
             if len(required_ids) < 2:
                 return jsonify({"error": "Add at least 2 required courses."}), 400
 
             catalog = _load_catalog()
             id_to_course = {c["course_id"]: c for c in catalog}
-            required = [id_to_course[cid] for cid in required_ids if cid in id_to_course]
+            required = [
+                id_to_course[cid] for cid in required_ids if cid in id_to_course
+            ]
             if len(required) < 2:
                 return jsonify({"error": "Could not find valid required courses."}), 400
 
+            if _required_courses_overlap(required):
+                return (
+                    jsonify(
+                        {"error": "Required courses have overlapping meeting times."}
+                    ),
+                    400,
+                )
+
+            from schedule_generator import generate_schedules
+
             raw_schedules = generate_schedules(
-                required, distributions, catalog=catalog, excluded_courses=[],
+                required,
+                distributions,
+                catalog=catalog,
+                excluded_courses=[],
                 max_results=300,
             )
 
@@ -373,13 +533,39 @@ def register_routes(app):
             if os.path.exists(_ratings_path):
                 try:
                     from score_schedule import load_professors
-                    df, prof_dict, vectorizer, tfidf_matrix = load_professors(_ratings_path)
+
+                    svd_data = None
+                    if use_svd:
+                        df, prof_dict, vectorizer, tfidf_matrix, svd_data = (
+                            load_professors(
+                                _ratings_path,
+                                use_svd=True,
+                                n_components=svd_components,
+                            )
+                        )
+                    else:
+                        df, prof_dict, vectorizer, tfidf_matrix = load_professors(
+                            _ratings_path
+                        )
+                    query_vec = vectorizer.transform([query or ""])
+                    query_latent = (
+                        svd_data["svd"].transform(query_vec)[0]
+                        if use_svd and svd_data is not None
+                        else None
+                    )
+                    effective_use_svd = (
+                        use_svd and svd_data is not None and query_latent is not None
+                    )
                     for sched in raw_schedules:
-                        selected_sections_by_course = _choose_non_overlapping_sections(sched)
+                        selected_sections_by_course = _choose_non_overlapping_sections(
+                            sched
+                        )
                         schedule_courses = [
                             _course_to_schedule_course(
                                 c,
-                                selected_sections_by_course.get(c.get("course_id", ""), []),
+                                selected_sections_by_course.get(
+                                    c.get("course_id", ""), []
+                                ),
                             )
                             for c in sched
                         ]
@@ -387,17 +573,21 @@ def register_routes(app):
                             schedule_courses,
                             df,
                             prof_dict,
-                            vectorizer,
                             tfidf_matrix,
-                            query,
+                            query_vec,
                             normalized_weights,
+                            use_svd=effective_use_svd,
+                            svd_data=svd_data,
+                            query_latent=query_latent,
                         )
-                        ranked_rows.append({
-                            "score": score,
-                            "score_breakdown": score_breakdown,
-                            "raw_sched": sched,
-                            "courses": schedule_courses,
-                        })
+                        ranked_rows.append(
+                            {
+                                "score": score,
+                                "score_breakdown": score_breakdown,
+                                "raw_sched": sched,
+                                "courses": schedule_courses,
+                            }
+                        )
                 except Exception as e:
                     scoring_error = f"{type(e).__name__}: {e}"
                     ranked_rows = []
@@ -407,7 +597,9 @@ def register_routes(app):
 
             if not ranked_rows:
                 for sched in raw_schedules:
-                    selected_sections_by_course = _choose_non_overlapping_sections(sched)
+                    selected_sections_by_course = _choose_non_overlapping_sections(
+                        sched
+                    )
                     schedule_courses = [
                         _course_to_schedule_course(
                             c,
@@ -415,30 +607,42 @@ def register_routes(app):
                         )
                         for c in sched
                     ]
-                    ranked_rows.append({
-                        "score": 0.5,
-                        "score_breakdown": {
-                            "weights": normalized_weights,
-                            "components": {"similarity": 0.0, "rating": 0.0, "difficulty": 0.0},
-                            "weighted_components": {"similarity": 0.0, "rating": 0.0, "difficulty": 0.0},
-                            "explanation": (
-                                "Professor rating data is unavailable; using neutral score."
-                                + (f" ({scoring_error})" if scoring_error else "")
-                            ),
-                            "course_breakdown": [
-                                {
-                                    "course_id": c.get("course_id", ""),
-                                    "title": c.get("title", ""),
-                                    "score": 0.0,
-                                    "matched_professors": 0,
-                                    "explanation": "No rating data available for this course.",
-                                }
-                                for c in schedule_courses
-                            ],
-                        },
-                        "raw_sched": sched,
-                        "courses": schedule_courses,
-                    })
+                    ranked_rows.append(
+                        {
+                            "score": 0.5,
+                            "score_breakdown": {
+                                "weights": normalized_weights,
+                                "components": {
+                                    "similarity": 0.0,
+                                    "rating": 0.0,
+                                    "difficulty": 0.0,
+                                },
+                                "weighted_components": {
+                                    "similarity": 0.0,
+                                    "rating": 0.0,
+                                    "difficulty": 0.0,
+                                },
+                                "explanation": (
+                                    "Professor rating data is unavailable; using neutral score."
+                                    + (f" ({scoring_error})" if scoring_error else "")
+                                ),
+                                "search_method": "svd" if use_svd else "tfidf",
+                                "latent_explainability": None,
+                                "course_breakdown": [
+                                    {
+                                        "course_id": c.get("course_id", ""),
+                                        "title": c.get("title", ""),
+                                        "score": 0.0,
+                                        "matched_professors": 0,
+                                        "explanation": "No rating data available for this course.",
+                                    }
+                                    for c in schedule_courses
+                                ],
+                            },
+                            "raw_sched": sched,
+                            "courses": schedule_courses,
+                        }
+                    )
 
             ranked_rows.sort(key=lambda x: x["score"], reverse=True)
 
@@ -472,18 +676,30 @@ def register_routes(app):
 
             schedules = []
             for i, row in enumerate(ranked_rows[:top_n], 1):
-                schedules.append({
-                    "rank": i,
-                    "score": row["score"],
-                    "score_breakdown": row["score_breakdown"],
-                    "total_credits": _total_credits(row["raw_sched"]),
-                    "courses": row["courses"],
-                })
+                schedules.append(
+                    {
+                        "rank": i,
+                        "score": row["score"],
+                        "score_breakdown": row["score_breakdown"],
+                        "total_credits": _total_credits(row["raw_sched"]),
+                        "courses": row["courses"],
+                    }
+                )
 
-            return jsonify({
-                "schedules": schedules,
-                "total": len(raw_schedules),
-            })
+            return jsonify(
+                {
+                    "schedules": schedules,
+                    "total": len(raw_schedules),
+                    "search_method": (
+                        "svd"
+                        if any(
+                            row.get("score_breakdown", {}).get("search_method") == "svd"
+                            for row in ranked_rows
+                        )
+                        else "tfidf"
+                    ),
+                }
+            )
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
         except Exception as e:
@@ -491,11 +707,12 @@ def register_routes(app):
 
     if USE_LLM:
         from llm_routes import register_chat_route
+
         register_chat_route(app, json_search)
 
-    @app.route('/', defaults={'path': ''})
-    @app.route('/<path:path>')
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
     def serve(path):
         if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
             return send_from_directory(app.static_folder, path)
-        return send_from_directory(app.static_folder, 'index.html')
+        return send_from_directory(app.static_folder, "index.html")
