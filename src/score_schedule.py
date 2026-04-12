@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD
 from sklearn.metrics.pairwise import cosine_similarity
 import json
 import os
@@ -10,7 +11,40 @@ def clean_name(name):
         return ""
     return name.strip().lower().replace(".", "")
 
-def load_professors(data_path):
+def _build_svd_data(vectorizer, tfidf_matrix, n_components=64, top_terms=6):
+    """Fit SVD over TF-IDF and return latent vectors with term descriptors."""
+    if tfidf_matrix.shape[0] < 2 or tfidf_matrix.shape[1] < 2:
+        return None
+
+    max_components = min(
+        n_components,
+        tfidf_matrix.shape[0] - 1,
+        tfidf_matrix.shape[1] - 1,
+    )
+    if max_components < 2:
+        return None
+
+    svd = TruncatedSVD(n_components=max_components, random_state=42)
+    prof_latent = svd.fit_transform(tfidf_matrix)
+    terms = vectorizer.get_feature_names_out()
+    dimension_terms = []
+    for dim_idx, component in enumerate(svd.components_):
+        pos_idx = np.argsort(component)[-top_terms:][::-1]
+        neg_idx = np.argsort(component)[:top_terms]
+        dimension_terms.append({
+            "dimension": dim_idx,
+            "top_positive_terms": [terms[i] for i in pos_idx],
+            "top_negative_terms": [terms[i] for i in neg_idx],
+        })
+
+    return {
+        "svd": svd,
+        "prof_latent": prof_latent,
+        "dimension_terms": dimension_terms,
+    }
+
+
+def load_professors(data_path, use_svd=False, n_components=64):
     records = []
 
     is_csv = data_path.lower().endswith(".csv")
@@ -76,6 +110,13 @@ def load_professors(data_path):
         row["clean_name"]: idx
         for idx, row in df.iterrows()
     }
+    if use_svd:
+        svd_data = _build_svd_data(
+            vectorizer,
+            tfidf_matrix,
+            n_components=n_components,
+        )
+        return df, prof_dict, vectorizer, tfidf_matrix, svd_data
     return df, prof_dict, vectorizer, tfidf_matrix
 
 def get_course_instructors(course):
