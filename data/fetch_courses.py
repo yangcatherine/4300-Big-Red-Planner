@@ -40,6 +40,7 @@ def get_all_as_courses():
     subjects = requests.get(subj_url).json()["data"]["subjects"]
 
     all_filtered_courses = []
+    all_course_ids = set()
 
     for s in subjects:
         subj_code = s["value"]
@@ -67,15 +68,24 @@ def get_all_as_courses():
                 ]
 
                 if as_dist:
+                    if f"{cls.get('subject')} {cls.get('catalogNbr')}" in all_course_ids:
+                        continue  # Skip crosslisted courses
+
+                    all_course_ids.add(f"{cls.get('subject')} {cls.get('catalogNbr')}")
+
                     enroll_groups = cls.get("enrollGroups", [])
                     units_min = 0
                     units_max = 0
+                    simple_combinations = []
                     if enroll_groups:
                         units_min = enroll_groups[0].get("unitsMinimum", 0)
                         units_max = enroll_groups[0].get("unitsMaximum", 0)
+                        simple_combinations = enroll_groups[0].get("simpleCombinations", [])
 
+                    for item in simple_combinations:
+                        all_course_ids.add(f"{item.get('subject')} {item.get('catalogNbr')}")
                     sections_list = []
-
+                    
                     for group in enroll_groups:
                         for sec in group.get("classSections", []):
 
