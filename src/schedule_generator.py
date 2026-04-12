@@ -200,6 +200,7 @@ def generate_schedules(
         current_schedule: list[dict],
         current_meetings: list[dict],
         used_course_ids: set[str],
+        used_distributions: set[str],
         min_course_id: str,
     ) -> None:
         if len(results) >= max_results:
@@ -218,6 +219,10 @@ def generate_schedules(
             cid = course.get("course_id", "")
             if cid <= min_course_id:
                 continue
+            # Check if any distribution of this course has already been used
+            course_dists = set(course.get("distribution_requirements", []))
+            if not course_dists.isdisjoint(used_distributions):
+                continue
             for combo in _get_section_combinations(course):
                 combo_meetings = _meetings_from_section_combo(combo)
                 if _schedules_overlap(combo_meetings, required_meetings):
@@ -229,10 +234,11 @@ def generate_schedules(
                     continue
                 new_meetings = current_meetings + combo_meetings
                 new_used = used_course_ids | {cid}
-                backtrack(new_schedule, new_meetings, new_used, cid)
+                new_used_dists = used_distributions | course_dists
+                backtrack(new_schedule, new_meetings, new_used, new_used_dists, cid)
 
     initial_schedule = list(required_courses)
-    backtrack(initial_schedule, [], exclude_ids, "")
+    backtrack(initial_schedule, [], exclude_ids, set(), "")
 
     # Filter by credit limits
     seen = set()
