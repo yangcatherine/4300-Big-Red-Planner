@@ -9,7 +9,12 @@ import json
 from itertools import product
 from flask import send_from_directory, request, jsonify, current_app
 from sklearn.metrics.pairwise import cosine_similarity
-from models import db, Professor, Episode, Review
+from models import db, Professor
+try:
+    from models import Episode, Review
+except ImportError:
+    Episode = None
+    Review = None
 from schedule_generator import generate_schedules
 
 # ── AI toggle ────────────────────────────────────────────────────────────────
@@ -418,6 +423,8 @@ def _score_schedule_with_breakdown(
 def json_search(query):
     if not query or not query.strip():
         query = "Kardashian"
+    if Episode is None or Review is None:
+        return []
     results = (
         db.session.query(Episode, Review)
         .join(Review, Episode.id == Review.id)
