@@ -123,6 +123,10 @@ def register_routes(app):
             distributions = body.get("distributions", [])
             query = body.get("query", "")
             top_n = body.get("top_n", 10)
+            w_sim = body.get("w_sim", 0.5)
+            w_rating = body.get("w_rating", 0.3)
+            w_difficulty = body.get("w_difficulty", 0.2)
+            difficulty_filter = body.get("difficulty_filter", None) 
 
             if len(required_ids) < 2:
                 return jsonify({"error": "Add at least 2 required courses."}), 400
@@ -134,6 +138,8 @@ def register_routes(app):
                 return jsonify({"error": "Could not find valid required courses."}), 400
 
             from schedule_generator import generate_schedules
+            from score_schedule import rank_schedules_with_scores, load_professors, clean_name, get_course_instructors
+            import pandas as pd
 
             raw_schedules = generate_schedules(
                 required, distributions, catalog=catalog, excluded_courses=[],
@@ -141,16 +147,43 @@ def register_routes(app):
             )
 
             ranked_pairs = []
+            print(f"ratings path: {_ratings_path}")
+            print(f"exists: {os.path.exists(_ratings_path)}")
             if os.path.exists(_ratings_path):
                 try:
                     from score_schedule import rank_schedules_with_scores, load_professors
                     df, prof_dict, vectorizer, tfidf_matrix = load_professors(_ratings_path)
                     ranked_pairs = rank_schedules_with_scores(
-                        raw_schedules, df, prof_dict, vectorizer, tfidf_matrix, query
+                        raw_schedules, df, prof_dict, vectorizer, tfidf_matrix, query,  w_sim, w_rating, w_difficulty
                     )
+                    if difficulty_filter:
+                        def avg_difficulty(sched):
+                            diffs = []
+                            for course in sched:
+                                for inst in get_course_instructors(course):
+                                    idx = prof_dict.get(clean_name(inst))
+                                    if idx is not None:
+                                        d = df.iloc[idx]["Difficulty"]
+                                        if not pd.isna(d):
+                                            diffs.append(d)
+                            return sum(diffs) / len(diffs) if diffs else 2.5
+
+                        def difficulty_matches(sched):
+                            avg = avg_difficulty(sched)
+                            if difficulty_filter == "easy":
+                                return avg < 2.5
+                            elif difficulty_filter == "medium":
+                                return 2.5 <= avg <= 3.5
+                            elif difficulty_filter == "hard":
+                                return avg > 3.5
+                            return True
+
+                        ranked_pairs = [(score, sched) for score, sched in ranked_pairs if difficulty_matches(sched)]
+
                 except Exception:
                     ranked_pairs = [(0.5, s) for s in raw_schedules]
             else:
+                #print("here")
                 ranked_pairs = [(0.5, s) for s in raw_schedules]
 
             def _total_credits(sched):

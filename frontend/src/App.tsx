@@ -26,6 +26,7 @@ function App(): JSX.Element {
   const [wSim, setWSim] = useState(0.5)
   const [wRating, setWRating] = useState(0.3)
   const [wDifficulty, setWDifficulty] = useState(0.2)
+  const [difficultyFilter, setDifficultyFilter] = useState<string>('')
 
   // Results
   const [schedules, setSchedules] = useState<Schedule[]>([])
@@ -96,6 +97,7 @@ function App(): JSX.Element {
         w_sim: wSim,
         w_rating: wRating,
         w_difficulty: wDifficulty,
+        difficulty_filter: difficultyFilter,
         top_n: 10,
       }),
     })
@@ -200,23 +202,41 @@ function App(): JSX.Element {
           <h3 className="section-title">Scoring Weights</h3>
           <div className="weights-grid">
             <div className="weight-control">
-              <label>Review Similarity</label>
+              <label>Weighting of Query</label>
               <input type="range" min="0" max="1" step="0.05" value={wSim}
                 onChange={(e) => setWSim(parseFloat(e.target.value))} />
               <span className="weight-value">{wSim.toFixed(2)}</span>
             </div>
             <div className="weight-control">
-              <label>Rating</label>
+              <label>Professor Preference</label>
               <input type="range" min="0" max="1" step="0.05" value={wRating}
                 onChange={(e) => setWRating(parseFloat(e.target.value))} />
               <span className="weight-value">{wRating.toFixed(2)}</span>
             </div>
             <div className="weight-control">
-              <label>Difficulty</label>
+              <label>Difficulty Weighting</label>
               <input type="range" min="0" max="1" step="0.05" value={wDifficulty}
                 onChange={(e) => setWDifficulty(parseFloat(e.target.value))} />
               <span className="weight-value">{wDifficulty.toFixed(2)}</span>
             </div>
+          </div>
+        </div>
+
+        {/* ── Difficulty Weighting ──────────────────────── */}
+        <div className="section-panel">
+          <h3 className="section-title">Schedule Difficulty</h3>
+          <div className="dist-grid">
+            {['easy', 'medium', 'hard'].map(level => (
+              <label key={level} className={`dist-chip ${difficultyFilter === level ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  name="difficulty"
+                  checked={difficultyFilter === level}
+                  onChange={() => setDifficultyFilter(level)}
+                />
+                {level.charAt(0).toUpperCase() + level.slice(1)}
+              </label>
+            ))}
           </div>
         </div>
 

@@ -61,7 +61,7 @@ def get_course_instructors(course):
                 instructors.add(inst.lower().strip())
     return list(instructors)
 
-def score_professor(prof_idx, df, query_vec, tfidf_matrix, query):
+def score_professor(prof_idx, df, query_vec, tfidf_matrix, query, w_sim=0.5, w_rating=0.3, w_difficulty=0.2):
     if prof_idx is None:
         return None # or put an average? 
 
@@ -82,24 +82,34 @@ def score_professor(prof_idx, df, query_vec, tfidf_matrix, query):
     #query_lower = query.lower()
 
     #confidence = min((num_ratings or 0) / 10, 1)
+    
+    # normalize weights so they add up to 1
+    total = w_sim + w_rating + w_difficulty
+    if total == 0:
+        w_sim, w_rating, w_difficulty = 0.5, 0.3, 0.2  # fallback to defaults
+    else:
+        w_sim = w_sim / total
+        w_rating = w_rating / total
+        w_difficulty = w_difficulty / total
 
     final_score = (
-        0.5 * sim +
-        0.3 * rating_score +
-        0.2 * difficulty_score
-    )
+            w_sim * sim +
+            w_rating * rating_score +
+            w_difficulty * difficulty_score
+        )
+    
     #print("sim, rating, difficulty, final score for professor", sim, rating_score, difficulty_score, final_score*confidence)
     #return final_score * confidence
     return final_score
 
-def score_course(course, df, prof_dict, query_vec, tfidf_matrix, query):
+def score_course(course, df, prof_dict, query_vec, tfidf_matrix, query, w_sim=0.5, w_rating=0.3, w_difficulty=0.2):
     instructors = get_course_instructors(course)
 
     scores = []
 
     for inst in instructors:
         prof_idx = prof_dict.get(clean_name(inst))  
-        score = score_professor(prof_idx, df, query_vec, tfidf_matrix, query)
+        score = score_professor(prof_idx, df, query_vec, tfidf_matrix, query, w_sim, w_rating, w_difficulty)
         if score is not None: 
             scores.append(score)
 
@@ -108,23 +118,23 @@ def score_course(course, df, prof_dict, query_vec, tfidf_matrix, query):
     #print("course score:", sum(scores)/len(scores))
     return sum(scores) / len(scores)
 
-def score_schedule(schedule, df, prof_dict, query_vec, tfidf_matrix, query):
+def score_schedule(schedule, df, prof_dict, query_vec, tfidf_matrix, query, w_sim=0.5, w_rating=0.3, w_difficulty=0.2):
     course_scores = []
 
     for course in schedule:
         course_scores.append(
-            score_course(course, df, prof_dict, query_vec, tfidf_matrix, query)
+            score_course(course, df, prof_dict, query_vec, tfidf_matrix, query, w_sim, w_rating, w_difficulty)
         )
 
     return sum(course_scores) / len(course_scores)
 
 
-def rank_schedules_with_scores(schedules, df, prof_dict, vectorizer, tfidf_matrix, query):
+def rank_schedules_with_scores(schedules, df, prof_dict, vectorizer, tfidf_matrix, query, w_sim=0.5, w_rating=0.3, w_difficulty=0.2):
     query_vec = vectorizer.transform([query])
     results = []
 
     for schedule in schedules:
-        score = score_schedule(schedule, df, prof_dict, query_vec, tfidf_matrix, query)
+        score = score_schedule(schedule, df, prof_dict, query_vec, tfidf_matrix, query, w_sim, w_rating, w_difficulty)
         results.append((score, schedule))
 
     results.sort(key=lambda x: x[0], reverse=True)

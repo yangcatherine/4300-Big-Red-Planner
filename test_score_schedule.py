@@ -10,22 +10,22 @@ if __name__ == "__main__":
     #PROFESSOR_CSV = "cornell_rmp_sample.csv"
 
     # Load professor TF-IDF and dictionary
-    df, prof_dict, vectorizer, tfidf_matrix = load_professors("ratings.jsonl")
+    df, prof_dict, vectorizer, tfidf_matrix = load_professors("data/ratings.jsonl")
 
     # Example query
-    query = "fun professor with easy workload and interesting coursework"
+    query = "super easy and fun and chill"
 
     # Load course catalog
     with open("data/cornell_FA25_courses.json") as f:
         catalog = json.load(f)
 
     # Example required courses
-    required = [c for c in catalog if c["course_id"] in ["CS 1110", "CS 2110"]]
+    required = [c for c in catalog if c["course_id"] in ["CS 1110", "CS 2800"]]
 
     # Generate schedules
     schedules = generate_schedules(
         required,
-        ["ALC", "HST", "SCD", "WRI"],
+        ["ALC", "BIO", "ETM"],
         catalog=catalog,
         excluded_courses=[],
     )
