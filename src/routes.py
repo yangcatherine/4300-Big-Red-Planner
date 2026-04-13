@@ -494,6 +494,9 @@ def register_routes(app):
             distributions = body.get("distributions", [])
             query = body.get("query", "")
             top_n = body.get("top_n", 10)
+            difficulty_filter = (body.get("difficulty_filter", "") or "").strip().lower()
+            if difficulty_filter not in {"", "easy", "medium", "hard"}:
+                difficulty_filter = ""
             use_svd = _coerce_bool(body.get("use_svd"), default=True)
             svd_components = int(body.get("svd_components", 64) or 64)
             normalized_weights = _normalize_weights(
@@ -537,6 +540,8 @@ def register_routes(app):
 
             ranked_rows = []
             scoring_error = None
+            df = None
+            prof_dict = {}
             if os.path.exists(_ratings_path):
                 try:
                     from score_schedule import load_professors
@@ -654,12 +659,12 @@ def register_routes(app):
             ranked_rows.sort(key=lambda x: x["score"], reverse=True)
 
             # difficulty filter
-            if difficulty_filter:
+            if difficulty_filter and df is not None and prof_dict:
                 def avg_difficulty(row):
                     diffs = []
                     for course in row["courses"]:
                         for inst in course.get("instructors", []):
-                            idx = prof_dict.get(clean_name(inst))
+                            idx = prof_dict.get(_clean_name(inst))
                             if idx is not None:
                                 d = df.iloc[idx]["Difficulty"]
                                 if not pd.isna(d):
