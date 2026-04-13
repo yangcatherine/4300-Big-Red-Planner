@@ -10,6 +10,7 @@ from typing import Optional, List
 
 DAY_MAP = {"M": 0, "T": 1, "W": 2, "R": 3, "F": 4}
 MAX_GENERATED_SCHEDULES = 250
+MAX_REQUIRED_MEETING_SETS = 200
 
 
 def _parse_days(days_str: str) -> set[int]:
@@ -99,6 +100,35 @@ def _schedules_overlap(meetings_a: list[dict], meetings_b: list[dict]) -> bool:
     return False
 
 
+def _valid_required_meeting_sets(required_courses: list[dict]) -> list[list[dict]]:
+    """
+    Enumerate feasible required-course meeting sets.
+
+    Each set corresponds to one non-overlapping section choice per required course.
+    """
+    combos_by_course = [
+        _get_section_combinations(course) or [[]] for course in required_courses
+    ]
+    valid_sets: list[list[dict]] = []
+
+    def backtrack(idx: int, occupied: list[dict]) -> None:
+        if len(valid_sets) >= MAX_REQUIRED_MEETING_SETS:
+            return
+        if idx >= len(required_courses):
+            valid_sets.append(occupied.copy())
+            return
+        for combo in combos_by_course[idx]:
+            combo_meetings = _meetings_from_section_combo(combo)
+            if _schedules_overlap(combo_meetings, occupied):
+                continue
+            backtrack(idx + 1, occupied + combo_meetings)
+            if len(valid_sets) >= MAX_REQUIRED_MEETING_SETS:
+                return
+
+    backtrack(0, [])
+    return valid_sets
+
+
 def _total_credits(courses: list[dict]) -> int:
     """Sum credits_max for all courses in a schedule."""
     return sum(c.get("credits_max", c.get("credits_min", 0)) for c in courses)
@@ -175,17 +205,8 @@ def generate_schedules(
             if cid:
                 exclude_ids.add(str(cid))
 
-    def get_blocked_meetings(course: dict) -> list[dict]:
-        """Get of all meetings from a course."""
-        all_meetings = []
-        for sec in course.get("sections", []):
-            all_meetings.extend(_get_section_meetings(sec))
-        return all_meetings
-
-    required_meetings = []
-    for c in required_courses:
-        required_meetings.extend(get_blocked_meetings(c))
-    if _schedules_overlap(required_meetings, required_meetings):
+    required_meeting_sets = _valid_required_meeting_sets(required_courses)
+    if not required_meeting_sets:
         raise ValueError("Required courses have overlapping meeting times.")
 
     # Add courses from allowed distributions
@@ -225,8 +246,6 @@ def generate_schedules(
                 continue
             for combo in _get_section_combinations(course):
                 combo_meetings = _meetings_from_section_combo(combo)
-                if _schedules_overlap(combo_meetings, required_meetings):
-                    continue
                 if _schedules_overlap(combo_meetings, current_meetings):
                     continue
                 new_schedule = current_schedule + [course]
@@ -238,7 +257,10 @@ def generate_schedules(
                 backtrack(new_schedule, new_meetings, new_used, new_used_dists, cid)
 
     initial_schedule = list(required_courses)
-    backtrack(initial_schedule, [], exclude_ids, set(), "")
+    for required_meetings in required_meeting_sets:
+        if len(results) >= limit:
+            break
+        backtrack(initial_schedule, required_meetings, exclude_ids, set(), "")
 
     # Filter by credit limits
     seen = set()

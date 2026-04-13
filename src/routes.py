@@ -218,15 +218,22 @@ def _coerce_bool(value, default: bool = False) -> bool:
 
 
 def _required_courses_overlap(courses: list[dict]) -> bool:
-    occupied = []
-    for course in courses:
-        course_meetings = []
-        for sec in course.get("sections", []):
-            course_meetings.extend(_section_meetings(sec))
-        if _meetings_conflict_with_any(course_meetings, occupied):
+    combos_by_course = [_section_combinations(course) or [[]] for course in courses]
+
+    def backtrack(idx: int, occupied: list[dict]) -> bool:
+        if idx >= len(courses):
             return True
-        occupied.extend(course_meetings)
-    return False
+        for combo in combos_by_course[idx]:
+            combo_meetings = []
+            for sec in combo:
+                combo_meetings.extend(_section_meetings(sec))
+            if _meetings_conflict_with_any(combo_meetings, occupied):
+                continue
+            if backtrack(idx + 1, occupied + combo_meetings):
+                return True
+        return False
+
+    return not backtrack(0, [])
 
 
 def _latent_explainability(
