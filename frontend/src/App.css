@@ -410,6 +410,17 @@
   gap: 1rem;
 }
 
+.empty-results-card {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(122, 16, 20, 0.85);
+  color: #fff3f5;
+  font-family: 'Open Sans', sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  padding: 0.95rem 1.1rem;
+}
+
 .results-heading {
   font-family: 'Kanit', sans-serif;
   font-size: 1.08rem;

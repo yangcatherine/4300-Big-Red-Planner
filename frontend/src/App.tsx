@@ -78,7 +78,9 @@ function App(): JSX.Element {
   const [totalSchedules, setTotalSchedules] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [hasGenerated, setHasGenerated] = useState(false)
   const [expandedCalendars, setExpandedCalendars] = useState<Set<number>>(new Set())
+  const resultsRef = useRef<HTMLDivElement>(null)
 
   // Close suggestions on outside click
   useEffect(() => {
@@ -103,6 +105,12 @@ function App(): JSX.Element {
     }, 200)
     return () => clearTimeout(timer)
   }, [courseQuery, selectedCourses])
+
+  useEffect(() => {
+    if (schedules.length === 0 || !resultsRef.current) return
+    const top = resultsRef.current.getBoundingClientRect().top + window.scrollY - 24
+    window.scrollTo({ top, behavior: 'smooth' })
+  }, [schedules])
 
   const addCourse = (course: CourseSuggestion) => {
     setSelectedCourses(prev => [...prev, course])
@@ -135,6 +143,7 @@ function App(): JSX.Element {
     }
     setError('')
     setLoading(true)
+    setHasGenerated(false)
     setSchedules([])
     setExpandedCalendars(new Set())
 
@@ -158,11 +167,13 @@ function App(): JSX.Element {
     if (data.error) {
       setError(data.error)
     } else {
-      setSchedules(data.schedules || [])
+      const generatedSchedules: Schedule[] = data.schedules || []
+      setSchedules(generatedSchedules)
       setTotalSchedules(data.total || 0)
       setOriginalQuery(data.original_query || '')   
       setRewrittenQuery(data.rewritten_query || '') 
       setSummary(data.summary || '')
+      setHasGenerated(true)
     }
     setLoading(false)
   }
@@ -374,7 +385,16 @@ function App(): JSX.Element {
         </aside>
       </main>
 
+      <div ref={resultsRef} />
       {/* ── Schedule Results ─────────────────────── */}
+      {hasGenerated && !loading && schedules.length === 0 && !error && (
+        <div className="results-container">
+          <div className="empty-results-card">
+            No schedules generated. Please change your configuration and try again.
+          </div>
+        </div>
+      )}
+
       {schedules.length > 0 && (
         <div className="results-container">
           <h2 className="results-heading">
