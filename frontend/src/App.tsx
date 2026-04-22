@@ -294,24 +294,25 @@ function App(): JSX.Element {
             <p className="section-help-text">
               Set how much each factor matters in ranking: review-match, overall rating, and difficulty.
             </p>
+            <div className="weight-scale">
+              <span>Not important</span>
+              <span>Very important</span>
+            </div>
             <div className="weights-grid">
               <div className="weight-control">
                 <label>Review Similarity</label>
                 <input type="range" min="0" max="1" step="0.05" value={wSim}
                   onChange={(e) => setWSim(parseFloat(e.target.value))} />
-                <span className="weight-value">{wSim.toFixed(2)}</span>
               </div>
               <div className="weight-control">
                 <label>Rating</label>
                 <input type="range" min="0" max="1" step="0.05" value={wRating}
                   onChange={(e) => setWRating(parseFloat(e.target.value))} />
-                <span className="weight-value">{wRating.toFixed(2)}</span>
               </div>
               <div className="weight-control">
                 <label>Difficulty</label>
                 <input type="range" min="0" max="1" step="0.05" value={wDifficulty}
                   onChange={(e) => setWDifficulty(parseFloat(e.target.value))} />
-                <span className="weight-value">{wDifficulty.toFixed(2)}</span>
               </div>
             </div>
           </div>

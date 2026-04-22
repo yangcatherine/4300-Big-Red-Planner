@@ -303,6 +303,17 @@
   gap: 0.85rem;
 }
 
+.weight-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.45rem;
+  margin-left: calc(120px + 0.7rem);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.75rem;
+  color: #ffe7ea;
+  font-weight: 600;
+}
+
 .weight-control {
   display: flex;
   flex-direction: row;
@@ -321,15 +332,6 @@
 .weight-control input[type='range'] {
   flex: 1;
   accent-color: #ffffff;
-}
-
-.weight-value {
-  font-size: 0.85rem;
-  font-family: 'Open Sans', sans-serif;
-  color: #ffe1e5;
-  font-weight: 700;
-  min-width: 2.5rem;
-  text-align: right;
 }
 
 .action-panel {
@@ -688,8 +690,8 @@
     min-width: auto;
   }
 
-  .weight-value {
-    text-align: left;
+  .weight-scale {
+    margin-left: 0;
   }
 
   .brand-title {

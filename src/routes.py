@@ -25,6 +25,7 @@ from score_schedule import (
 )
 import pandas as pd
 import logging
+
 logger = logging.getLogger(__name__)
 
 # ── AI toggle ────────────────────────────────────────────────────────────────
@@ -41,6 +42,14 @@ _ratings_path = (
 )
 _DAY_MAP = {"M": 0, "T": 1, "W": 2, "R": 3, "F": 4}
 _DEFAULT_WEIGHTS = {"similarity": 0.5, "rating": 0.3, "difficulty": 0.2}
+_MID = 0.5
+_LEVEL_DIFF = {
+    1: 2.0,  # 1000
+    2: 2.5,  # 2000
+    3: 3.0,  # 3000
+    4: 4.0,  # 4000
+    5: 4.5,  # 5000
+}
 
 
 def _load_catalog():
@@ -225,6 +234,35 @@ def _coerce_bool(value, default: bool = False) -> bool:
     return bool(value)
 
 
+def _level_diff(course_id: str) -> float:
+    """Estimate default difficulty from course number."""
+    course_id = (course_id or "").strip()
+    tokens = course_id.split()
+    if len(tokens) < 2:
+        return _MID
+    number_token = tokens[-1]
+    if not number_token.isdigit() or len(number_token) < 4:
+        return _MID
+    level = int(number_token[0])
+    difficulty_1_to_5 = _LEVEL_DIFF.get(level, 4.0 if level >= 5 else 2.5)
+    return difficulty_1_to_5 / 5.0
+
+
+def _no_review_defaults(
+    course: dict, weights: dict
+) -> tuple[float, float, float, float]:
+    """Default components for courses with no reviews."""
+    sim = _MID
+    rating = _MID
+    difficulty = _level_diff(course.get("course_id", ""))
+    score = (
+        weights["similarity"] * sim
+        + weights["rating"] * rating
+        + weights["difficulty"] * difficulty
+    )
+    return sim, rating, difficulty, score
+
+
 def _required_courses_overlap(courses: list[dict]) -> bool:
     combos_by_course = [_section_combinations(course) or [[]] for course in courses]
 
@@ -361,12 +399,12 @@ def _score_schedule_with_breakdown(
                 f"for this course section choice."
             )
         else:
-            avg_sim = 0.0
-            avg_rating = 0.0
-            avg_difficulty = 0.0
-            course_score = 0.0
+            avg_sim, avg_rating, avg_difficulty, course_score = _no_review_defaults(
+                course, weights
+            )
             explanation = (
-                "No instructor review data matched; this course contributes 0.00."
+                "No instructor review data matched; using neutral similarity/rating "
+                "and level-based default difficulty."
             )
 
         sim_values.append(avg_sim)
@@ -501,12 +539,12 @@ def register_routes(app):
             required_ids = body.get("required_course_ids", [])
             distributions = body.get("distributions", [])
             query = body.get("query", "")
-            if USE_LLM: 
-                try: 
+            if USE_LLM:
+                try:
                     from llm_routes import llm_rewrite_query
                     import os
                     from infosci_spark_client import LLMClient
-            
+
                     _llm_client = LLMClient(api_key=os.getenv("SPARK_API_KEY"))
                     rewritten_query = llm_rewrite_query(_llm_client, query)
                 except Exception as e:
@@ -647,21 +685,57 @@ def register_routes(app):
                     ]
                     ranked_rows.append(
                         {
-                            "score": 0.5,
+                            "score": (
+                                sum(
+                                    _no_review_defaults(c, normalized_weights)[3]
+                                    for c in schedule_courses
+                                )
+                                / len(schedule_courses)
+                                if schedule_courses
+                                else _MID
+                            ),
                             "score_breakdown": {
                                 "weights": normalized_weights,
                                 "components": {
-                                    "similarity": 0.0,
-                                    "rating": 0.0,
-                                    "difficulty": 0.0,
+                                    "similarity": _MID,
+                                    "rating": _MID,
+                                    "difficulty": (
+                                        sum(
+                                            _no_review_defaults(c, normalized_weights)[
+                                                2
+                                            ]
+                                            for c in schedule_courses
+                                        )
+                                        / len(schedule_courses)
+                                        if schedule_courses
+                                        else _MID
+                                    ),
                                 },
                                 "weighted_components": {
-                                    "similarity": 0.0,
-                                    "rating": 0.0,
-                                    "difficulty": 0.0,
+                                    "similarity": (
+                                        normalized_weights["similarity"] * _MID
+                                    ),
+                                    "rating": (normalized_weights["rating"] * _MID),
+                                    "difficulty": (
+                                        normalized_weights["difficulty"]
+                                        * (
+                                            (
+                                                sum(
+                                                    _no_review_defaults(
+                                                        c, normalized_weights
+                                                    )[2]
+                                                    for c in schedule_courses
+                                                )
+                                                / len(schedule_courses)
+                                            )
+                                            if schedule_courses
+                                            else _MID
+                                        )
+                                    ),
                                 },
                                 "explanation": (
-                                    "Professor rating data is unavailable; using neutral score."
+                                    "Professor rating data is unavailable; using neutral "
+                                    "similarity/rating and level-based default difficulty."
                                     + (f" ({scoring_error})" if scoring_error else "")
                                 ),
                                 "search_method": "svd" if use_svd else "tfidf",
@@ -670,9 +744,14 @@ def register_routes(app):
                                     {
                                         "course_id": c.get("course_id", ""),
                                         "title": c.get("title", ""),
-                                        "score": 0.0,
+                                        "score": _no_review_defaults(
+                                            c, normalized_weights
+                                        )[3],
                                         "matched_professors": 0,
-                                        "explanation": "No rating data available for this course.",
+                                        "explanation": (
+                                            "No rating data available; applied neutral "
+                                            "defaults with level-based difficulty."
+                                        ),
                                     }
                                     for c in schedule_courses
                                 ],
@@ -729,10 +808,11 @@ def register_routes(app):
             if USE_LLM:
                 try:
                     import requests as http_requests
+
                     chat_resp = http_requests.post(
                         "http://localhost:5001/api/chat",
                         json={"message": query, "schedules": schedules},
-                        timeout=15
+                        timeout=15,
                     )
                     llm_summary = chat_resp.json().get("summary")
                 except Exception as e:
@@ -741,7 +821,7 @@ def register_routes(app):
             return jsonify(
                 {
                     "schedules": schedules,
-                    "original_query": query, 
+                    "original_query": query,
                     "rewritten_query": rewritten_query,
                     "summary": llm_summary,
                     "total": len(raw_schedules),
