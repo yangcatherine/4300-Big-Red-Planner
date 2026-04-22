@@ -129,6 +129,10 @@ function App(): JSX.Element {
       setError('Add at least 2 required courses.')
       return
     }
+    if (selectedDists.size < 1) {
+      setError('Select at least 1 distribution.')
+      return
+    }
     setError('')
     setLoading(true)
     setSchedules([])
@@ -255,7 +259,7 @@ function App(): JSX.Element {
           <div className="section-panel">
             <div className="section-heading-row">
               <h3 className="section-title">Distribution Preferences</h3>
-              <span className="section-meta">{selectedDists.size} selected</span>
+              <span className="section-meta">{selectedDists.size} selected (minimum 1)</span>
             </div>
             <p className="section-help-text">
               Optional filters. Added courses are chosen to match selected distribution categories.
@@ -361,7 +365,7 @@ function App(): JSX.Element {
             <button
               className="generate-btn"
               onClick={generateSchedules}
-              disabled={loading || selectedCourses.length < 2}
+              disabled={loading || selectedCourses.length < 2 || selectedDists.size < 1}
             >
               {loading ? 'Generating…' : 'Generate Schedules'}
             </button>
