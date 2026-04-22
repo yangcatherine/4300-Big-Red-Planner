@@ -766,31 +766,43 @@ def register_routes(app):
 
             ranked_rows.sort(key=lambda x: x["score"], reverse=True)
 
-            # difficulty filter
-            if difficulty_filter and df is not None and prof_dict:
+            # difficulty preference: rerank by distance to target (do not filter out)
+            if difficulty_filter:
+                target_by_filter = {"easy": 2.0, "medium": 2.5, "hard": 4.0}
+                target_difficulty = target_by_filter.get(difficulty_filter)
 
                 def avg_difficulty(row):
+                    # Primary source: normalized difficulty already computed during scoring.
+                    comp_diff = (
+                        row.get("score_breakdown", {})
+                        .get("components", {})
+                        .get("difficulty")
+                    )
+                    if comp_diff is not None:
+                        try:
+                            return float(comp_diff) * 5.0
+                        except (TypeError, ValueError):
+                            pass
+
+                    # Fallback: derive from matched professor rows when available.
                     diffs = []
-                    for course in row["courses"]:
-                        for inst in course.get("instructors", []):
-                            idx = prof_dict.get(_clean_name(inst))
-                            if idx is not None:
-                                d = df.iloc[idx]["Difficulty"]
-                                if not pd.isna(d):
-                                    diffs.append(d)
+                    if df is not None and prof_dict:
+                        for course in row.get("courses", []):
+                            for inst in course.get("instructors", []):
+                                idx = prof_dict.get(_clean_name(inst))
+                                if idx is not None:
+                                    d = df.iloc[idx]["Difficulty"]
+                                    if not pd.isna(d):
+                                        diffs.append(float(d))
                     return sum(diffs) / len(diffs) if diffs else 2.5
 
-                def difficulty_matches(row):
-                    avg = avg_difficulty(row)
-                    if difficulty_filter == "easy":
-                        return avg < 2.5
-                    elif difficulty_filter == "medium":
-                        return 2.5 <= avg <= 3.5
-                    elif difficulty_filter == "hard":
-                        return avg > 3.5
-                    return True
-
-                ranked_rows = [row for row in ranked_rows if difficulty_matches(row)]
+                if target_difficulty is not None:
+                    ranked_rows.sort(
+                        key=lambda row: (
+                            abs(avg_difficulty(row) - target_difficulty),
+                            -row["score"],
+                        )
+                    )
 
             def _total_credits(sched):
                 return sum(c.get("credits_min", c.get("credits_max", 0)) for c in sched)
