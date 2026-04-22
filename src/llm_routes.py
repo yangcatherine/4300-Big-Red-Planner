@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 def llm_search_decision(client, user_message):
-    """Ask the LLM whether to search the DB and which word to use."""
     messages = [
         {
             "role": "system",
@@ -42,7 +41,60 @@ def llm_search_decision(client, user_message):
         return True, "Kardashian"
     return False, None
 
+def llm_rewrite_query(client, user_message):
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You rewrite student course preference queries so they match the language "
+                "used in professor reviews on sites like RateMyProfessor.\n\n"
+                "Rules:\n"
+                "- Output ONLY the rewritten query string. No explanation, no JSON, no punctuation.\n"
+                "- Keep it to 5-10 words.\n"
+                "- Use words that would actually appear in a student-written professor review.\n"
+                "- Expand slang/informal phrases: "
+                "'chill' -> 'relaxed easygoing lenient', "
+                "'no essays' -> 'no essays minimal writing', "
+                "'fun' -> 'engaging entertaining enjoyable', "
+                "'easy A' -> 'easy grading high grades lenient'.\n"
+                "- If the query has no professor preference content, output it unchanged."
+            ),
+        },
+        {"role": "user", "content": user_message},
+    ]
+    response = client.chat(messages)
+    rewritten = (response.get("content") or user_message).strip()
+    rewritten = re.sub(r'^["\']|["\']$', "", rewritten).strip()
+    logger.info(f"Query rewrite: '{user_message}' -> '{rewritten}'")
+    return rewritten
 
+"""
+def extract_schedule_preferences(client, user_message):
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You extract scheduling preferences from a student's message.\n"
+                "Return JSON ONLY with this schema:\n"
+                "{\n"
+                "  \"no_friday\": true/false,\n"
+                "  \"no_morning\": true/false,\n"
+                "  \"compact\": true/false,\n"
+                "  \"no_monday\": true/false,\n"
+                "  \"lunch_break\": true/false\n"
+                "}\n"
+                "Do NOT explain."
+            )
+        },
+        {"role": "user", "content": user_message}
+    ]
+
+    response = client.chat(messages)
+    try:
+        return json.loads(response.get("content", "{}"))
+    except:
+        return {}
+"""
 def register_chat_route(app, json_search):
     """Register the /api/chat SSE endpoint. Called from routes.py."""
 
@@ -53,11 +105,65 @@ def register_chat_route(app, json_search):
         if not user_message:
             return jsonify({"error": "Message is required"}), 400
 
-        api_key = os.getenv("API_KEY")
+        api_key = os.getenv("SPARK_API_KEY")
         if not api_key:
             return jsonify({"error": "API_KEY not set — add it to your .env file"}), 500
 
         client = LLMClient(api_key=api_key)
+
+        rewritten_query = llm_rewrite_query(client, user_message)
+
+        schedules = data.get("schedules", [])  
+
+        top_schedules = schedules[:10]
+        summary = None
+        if top_schedules:
+            prompt_schedules = [
+                {
+                    "rank": s.get("rank"),
+                    "score": round(s.get("score", 0), 4),
+                    "courses": [
+                        {
+                            "course_id": c.get("course_id"),
+                            "title": c.get("title"),
+                            "instructors": c.get("instructors", []),
+                        }
+                        for c in s.get("courses", [])
+                    ],
+                }
+                for s in top_schedules
+            ]
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a Cornell schedule advisor. "
+                        "Given the student's original request and the top IR-ranked schedules "
+                        "(scored by professor review similarity to the rewritten query), "
+                        "write 2-3 sentences explaining which schedule best matches their "
+                        "preference and why. Be specific about professors or courses."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps({
+                        "original_query": user_message,
+                        "rewritten_ir_query": rewritten_query,
+                        "top_schedules": prompt_schedules,
+                    }),
+                },
+            ]
+            response = client.chat(messages)
+            summary = (response.get("content") or "").strip()
+ 
+        return jsonify({
+            "original_query": user_message,
+            "rewritten_query": rewritten_query,  # display this in UI as the IR query used
+            "summary": summary,
+        })
+    
+        
+        """
         use_search, search_term = llm_search_decision(client, user_message)
 
         if use_search:
@@ -92,3 +198,4 @@ def register_chat_route(app, json_search):
             mimetype="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+        """

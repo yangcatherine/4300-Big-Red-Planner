@@ -56,6 +56,9 @@ function App(): JSX.Element {
   const [selectedCourses, setSelectedCourses] = useState<CourseSuggestion[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const suggestionsRef = useRef<HTMLDivElement>(null)
+  const [originalQuery, setOriginalQuery] = useState('')
+  const [rewrittenQuery, setRewrittenQuery] = useState('')
+  const [summary, setSummary] = useState('')
 
   // Distributions
   const [selectedDists, setSelectedDists] = useState<Set<string>>(new Set())
@@ -151,6 +154,9 @@ function App(): JSX.Element {
     } else {
       setSchedules(data.schedules || [])
       setTotalSchedules(data.total || 0)
+      setOriginalQuery(data.original_query || '')   
+      setRewrittenQuery(data.rewritten_query || '') 
+      setSummary(data.summary || '')
     }
     setLoading(false)
   }
@@ -359,6 +365,22 @@ function App(): JSX.Element {
           <h2 className="results-heading">
             Top {schedules.length} of {totalSchedules} schedules
           </h2>
+
+          {rewrittenQuery && (
+            <div className="rag-query-panel">
+              <span className="rag-label">Your query:</span>
+              <span className="rag-original">"{originalQuery}"</span>
+              <span className="rag-arrow">→</span>
+              <span className="rag-label">Expanded for IR search:</span>
+              <span className="rag-rewritten">"{rewrittenQuery}"</span>
+            </div>
+          )}
+
+          {summary && (
+            <div className="rag-summary">
+              {summary}
+            </div>
+          )}
 
           {schedules.map(sched => {
             const calendarEvents = buildCalendarEvents(sched)

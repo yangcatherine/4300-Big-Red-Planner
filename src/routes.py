@@ -18,9 +18,11 @@ except ImportError:
 from schedule_generator import generate_schedules
 from score_schedule import rank_schedules_with_scores, load_professors, clean_name, get_course_instructors
 import pandas as pd
+import logging
+logger = logging.getLogger(__name__)
 
 # ── AI toggle ────────────────────────────────────────────────────────────────
-USE_LLM = False
+USE_LLM = True
 # ─────────────────────────────────────────────────────────────────────────────
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -493,6 +495,20 @@ def register_routes(app):
             required_ids = body.get("required_course_ids", [])
             distributions = body.get("distributions", [])
             query = body.get("query", "")
+            if USE_LLM: 
+                try: 
+                    from llm_routes import llm_rewrite_query
+                    import os
+                    from infosci_spark_client import LLMClient
+            
+                    _llm_client = LLMClient(api_key=os.getenv("SPARK_API_KEY"))
+                    rewritten_query = llm_rewrite_query(_llm_client, query)
+                except Exception as e:
+                    logger.warning(f"Query rewrite failed, using original: {e}")
+                    rewritten_query = query
+            else:
+                rewritten_query = query
+
             top_n = body.get("top_n", 10)
             difficulty_filter = (body.get("difficulty_filter", "") or "").strip().lower()
             if difficulty_filter not in {"", "easy", "medium", "hard"}:
@@ -559,7 +575,7 @@ def register_routes(app):
                         df, prof_dict, vectorizer, tfidf_matrix = load_professors(
                             _ratings_path
                         )
-                    query_vec = vectorizer.transform([query or ""])
+                    query_vec = vectorizer.transform([rewritten_query or ""])
                     query_latent = (
                         svd_data["svd"].transform(query_vec)[0]
                         if use_svd and svd_data is not None
@@ -698,9 +714,25 @@ def register_routes(app):
                     }
                 )
 
+            llm_summary = None
+            if USE_LLM:
+                try:
+                    import requests as http_requests
+                    chat_resp = http_requests.post(
+                        "http://localhost:5001/api/chat",
+                        json={"message": query, "schedules": schedules},
+                        timeout=15
+                    )
+                    llm_summary = chat_resp.json().get("summary")
+                except Exception as e:
+                    llm_summary = None
+
             return jsonify(
                 {
                     "schedules": schedules,
+                    "original_query": query, 
+                    "rewritten_query": rewritten_query,
+                    "summary": llm_summary,
                     "total": len(raw_schedules),
                     "search_method": (
                         "svd"
