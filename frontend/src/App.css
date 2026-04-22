@@ -728,3 +728,47 @@
     height: 130px;
   }
 }
+
+.rag-query-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  font-family: 'Open Sans', sans-serif;
+  font-size: 0.85rem;
+}
+
+
+.rag-label {
+  color: #ffd8de;
+  font-weight: 600;
+}
+
+.rag-original {
+  color: #fff;
+}
+
+.rag-arrow {
+  color: #ffb3bc;
+  font-size: 1.1rem;
+}
+
+.rag-rewritten {
+  color: #ffe066;
+  font-weight: 700;
+}
+
+.rag-summary {
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-family: 'Open Sans', sans-serif;
+  font-size: 0.88rem;
+  color: #fff;
+  line-height: 1.5;
+}
