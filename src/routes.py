@@ -10,13 +10,19 @@ from itertools import product
 from flask import send_from_directory, request, jsonify, current_app
 from sklearn.metrics.pairwise import cosine_similarity
 from models import db, Professor
+
 try:
     from models import Episode, Review
 except ImportError:
     Episode = None
     Review = None
 from schedule_generator import generate_schedules
-from score_schedule import rank_schedules_with_scores, load_professors, clean_name, get_course_instructors
+from score_schedule import (
+    rank_schedules_with_scores,
+    load_professors,
+    clean_name,
+    get_course_instructors,
+)
 import pandas as pd
 
 # ── AI toggle ────────────────────────────────────────────────────────────────
@@ -494,7 +500,9 @@ def register_routes(app):
             distributions = body.get("distributions", [])
             query = body.get("query", "")
             top_n = body.get("top_n", 10)
-            difficulty_filter = (body.get("difficulty_filter", "") or "").strip().lower()
+            difficulty_filter = (
+                (body.get("difficulty_filter", "") or "").strip().lower()
+            )
             if difficulty_filter not in {"", "easy", "medium", "hard"}:
                 difficulty_filter = ""
             use_svd = _coerce_bool(body.get("use_svd"), default=True)
@@ -511,6 +519,8 @@ def register_routes(app):
 
             if len(required_ids) < 2:
                 return jsonify({"error": "Add at least 2 required courses."}), 400
+            if not distributions:
+                return jsonify({"error": "Select at least 1 distribution."}), 400
 
             catalog = _load_catalog()
             id_to_course = {c["course_id"]: c for c in catalog}
@@ -660,6 +670,7 @@ def register_routes(app):
 
             # difficulty filter
             if difficulty_filter and df is not None and prof_dict:
+
                 def avg_difficulty(row):
                     diffs = []
                     for course in row["courses"]:
