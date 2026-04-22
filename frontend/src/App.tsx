@@ -70,6 +70,7 @@ function App(): JSX.Element {
   const [wSim, setWSim] = useState(0.5)
   const [wRating, setWRating] = useState(0.3)
   const [wDifficulty, setWDifficulty] = useState(0.2)
+  const [useIdf, setUseIdf] = useState(true)
   const [difficultyFilter, setDifficultyFilter] = useState<string>('')
 
   // Results
@@ -143,6 +144,7 @@ function App(): JSX.Element {
         w_sim: wSim,
         w_rating: wRating,
         w_difficulty: wDifficulty,
+        use_idf: useIdf,
         difficulty_filter: difficultyFilter,
         top_n: 10,
       }),
@@ -294,6 +296,14 @@ function App(): JSX.Element {
             <p className="section-help-text">
               Set how much each factor matters in ranking: review-match, overall rating, and difficulty.
             </p>
+            <label className="idf-toggle">
+              <input
+                type="checkbox"
+                checked={useIdf}
+                onChange={(e) => setUseIdf(e.target.checked)}
+              />
+              Use IDF weighting
+            </label>
             <div className="weight-scale">
               <span>Not important</span>
               <span>Very important</span>

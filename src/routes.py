@@ -560,6 +560,7 @@ def register_routes(app):
             if difficulty_filter not in {"", "easy", "medium", "hard"}:
                 difficulty_filter = ""
             use_svd = _coerce_bool(body.get("use_svd"), default=True)
+            use_idf = _coerce_bool(body.get("use_idf"), default=True)
             svd_components = int(body.get("svd_components", 64) or 64)
             normalized_weights = _normalize_weights(
                 {
@@ -617,11 +618,13 @@ def register_routes(app):
                                 _ratings_path,
                                 use_svd=True,
                                 n_components=svd_components,
+                                use_idf=use_idf,
                             )
                         )
                     else:
                         df, prof_dict, vectorizer, tfidf_matrix = load_professors(
-                            _ratings_path
+                            _ratings_path,
+                            use_idf=use_idf,
                         )
                     query_vec = vectorizer.transform([rewritten_query or ""])
                     query_latent = (

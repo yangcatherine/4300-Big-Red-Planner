@@ -6,6 +6,7 @@ Setup:
   1. Add API_KEY=your_key to .env
   2. Set USE_LLM = True in routes.py
 """
+
 import json
 import os
 import re
@@ -41,6 +42,7 @@ def llm_search_decision(client, user_message):
         return True, "Kardashian"
     return False, None
 
+
 def llm_rewrite_query(client, user_message):
     messages = [
         {
@@ -67,6 +69,7 @@ def llm_rewrite_query(client, user_message):
     rewritten = re.sub(r'^["\']|["\']$', "", rewritten).strip()
     logger.info(f"Query rewrite: '{user_message}' -> '{rewritten}'")
     return rewritten
+
 
 """
 def extract_schedule_preferences(client, user_message):
@@ -95,6 +98,8 @@ def extract_schedule_preferences(client, user_message):
     except:
         return {}
 """
+
+
 def register_chat_route(app, json_search):
     """Register the /api/chat SSE endpoint. Called from routes.py."""
 
@@ -113,7 +118,7 @@ def register_chat_route(app, json_search):
 
         rewritten_query = llm_rewrite_query(client, user_message)
 
-        schedules = data.get("schedules", [])  
+        schedules = data.get("schedules", [])
 
         top_schedules = schedules[:10]
         summary = None
@@ -146,23 +151,26 @@ def register_chat_route(app, json_search):
                 },
                 {
                     "role": "user",
-                    "content": json.dumps({
-                        "original_query": user_message,
-                        "rewritten_ir_query": rewritten_query,
-                        "top_schedules": prompt_schedules,
-                    }),
+                    "content": json.dumps(
+                        {
+                            "original_query": user_message,
+                            "rewritten_ir_query": rewritten_query,
+                            "top_schedules": prompt_schedules,
+                        }
+                    ),
                 },
             ]
             response = client.chat(messages)
             summary = (response.get("content") or "").strip()
- 
-        return jsonify({
-            "original_query": user_message,
-            "rewritten_query": rewritten_query,  # display this in UI as the IR query used
-            "summary": summary,
-        })
-    
-        
+
+        return jsonify(
+            {
+                "original_query": user_message,
+                "rewritten_query": rewritten_query,  # display this in UI as the IR query used
+                "summary": summary,
+            }
+        )
+
         """
         use_search, search_term = llm_search_decision(client, user_message)
 

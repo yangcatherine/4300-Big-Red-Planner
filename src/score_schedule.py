@@ -44,7 +44,7 @@ def _build_svd_data(vectorizer, tfidf_matrix, n_components=64, top_terms=6):
     }
 
 
-def load_professors(data_path, use_svd=False, n_components=64):
+def load_professors(data_path, use_svd=False, n_components=64, use_idf=True):
     records = []
 
     is_csv = data_path.lower().endswith(".csv")
@@ -103,7 +103,7 @@ def load_professors(data_path, use_svd=False, n_components=64):
         # Avoid empty TF-IDF vocabulary by providing minimal text.
         df["Review_Text"] = df["Professor"].fillna("").astype(str)
 
-    vectorizer = TfidfVectorizer(stop_words='english')
+    vectorizer = TfidfVectorizer(stop_words='english', use_idf=use_idf)
     tfidf_matrix = vectorizer.fit_transform(df["Review_Text"])
 
     prof_dict = {
