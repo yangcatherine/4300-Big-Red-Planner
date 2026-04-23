@@ -822,15 +822,10 @@ def register_routes(app):
             llm_summary = None
             if USE_LLM:
                 try:
-                    import requests as http_requests
-
-                    chat_resp = http_requests.post(
-                        "http://localhost:5001/api/chat",
-                        json={"message": query, "schedules": schedules},
-                        timeout=15,
-                    )
-                    llm_summary = chat_resp.json().get("summary")
+                    from llm_routes import llm_generate_summary
+                    llm_summary = llm_generate_summary(_llm_client, query, rewritten_query, schedules)
                 except Exception as e:
+                    logger.warning(f"LLM summary failed: {e}")
                     llm_summary = None
 
             return jsonify(

@@ -99,6 +99,50 @@ def extract_schedule_preferences(client, user_message):
         return {}
 """
 
+def llm_generate_summary(client, user_message, rewritten_query, schedules):
+    top_schedules = schedules[:10]
+    if not top_schedules:
+        return None
+    
+    prompt_schedules = [
+        {
+            "rank": s.get("rank"),
+            "score": round(s.get("score", 0), 4),
+            "courses": [
+                {
+                    "course_id": c.get("course_id"),
+                    "title": c.get("title"),
+                    "instructors": c.get("instructors", []),
+                }
+                for c in s.get("courses", [])
+            ],
+        }
+        for s in top_schedules
+    ]
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a Cornell schedule advisor. "
+                "Given the student's original request and the top IR-ranked schedules "
+                "(scored by professor review similarity to the rewritten query), "
+                "write 2-3 sentences explaining which schedule best matches their "
+                "preference and why. Be specific about professors or courses."
+            ),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "original_query": user_message,
+                    "rewritten_ir_query": rewritten_query,
+                    "top_schedules": prompt_schedules,
+                }
+            ),
+        },
+    ]
+    response = client.chat(messages)
+    return (response.get("content") or "").strip()
 
 def register_chat_route(app, json_search):
     """Register the /api/chat SSE endpoint. Called from routes.py."""
