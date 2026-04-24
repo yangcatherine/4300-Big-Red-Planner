@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import SearchIcon from './assets/mag.png'
-import { CourseSuggestion, Schedule } from './types'
+import { CourseSuggestion, Schedule, ScheduleMatcherResponse, ExtractedSchedulePreferences } from './types'
 
 const ALL_DISTRIBUTIONS = [
   'ALC', 'BIO', 'ETM', 'FLOPI', 'GLC',
@@ -59,6 +59,12 @@ function App(): JSX.Element {
   const [originalQuery, setOriginalQuery] = useState('')
   const [rewrittenQuery, setRewrittenQuery] = useState('')
   const [summary, setSummary] = useState('')
+
+  // Time / layout schedule preferences (LLM + extract_schedule_preferences)
+  const [scheduleTimePref, setScheduleTimePref] = useState('')
+  const [schedMatchLoading, setSchedMatchLoading] = useState(false)
+  const [schedMatchError, setSchedMatchError] = useState('')
+  const [schedMatchResult, setSchedMatchResult] = useState<ScheduleMatcherResponse | null>(null)
 
   // Distributions
   const [selectedDists, setSelectedDists] = useState<Set<string>>(new Set())
@@ -142,6 +148,8 @@ function App(): JSX.Element {
       return
     }
     setError('')
+    setSchedMatchError('')
+    setSchedMatchResult(null)
     setLoading(true)
     setHasGenerated(false)
     setSchedules([])
@@ -176,6 +184,52 @@ function App(): JSX.Element {
       setHasGenerated(true)
     }
     setLoading(false)
+  }
+
+  const runScheduleMatcher = async () => {
+    if (schedules.length === 0) {
+      setSchedMatchError('Generate schedules first, then use this tool.')
+      return
+    }
+    const msg = scheduleTimePref.trim()
+    if (!msg) {
+      setSchedMatchError('Describe your schedule preferences (e.g. no Friday, no 8am).')
+      return
+    }
+    setSchedMatchError('')
+    setSchedMatchLoading(true)
+    try {
+      const resp = await fetch('/api/schedule-matcher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, schedules }),
+      })
+      const data = (await resp.json()) as ScheduleMatcherResponse & { error?: string }
+      if (data.error || !resp.ok) {
+        setSchedMatchResult(null)
+        setSchedMatchError(data.error || 'Request failed.')
+        return
+      }
+      setSchedMatchResult(data)
+    } catch (e) {
+      setSchedMatchResult(null)
+      setSchedMatchError(e instanceof Error ? e.message : 'Request failed.')
+    } finally {
+      setSchedMatchLoading(false)
+    }
+  }
+
+  const formatExtractedPrefs = (p: ExtractedSchedulePreferences) => {
+    const labels: Record<keyof ExtractedSchedulePreferences, string> = {
+      no_friday: 'no Friday',
+      no_morning: 'avoid early morning',
+      compact: 'compact / fewer gaps',
+      no_monday: 'no Monday',
+      lunch_break: 'lunch break',
+    }
+    return (Object.keys(labels) as (keyof ExtractedSchedulePreferences)[])
+      .filter((k) => p[k])
+      .map((k) => labels[k])
   }
 
   const toggleCalendar = (rank: number) => {
@@ -416,6 +470,59 @@ function App(): JSX.Element {
               {summary}
             </div>
           )}
+
+          <div className="schedule-matcher-panel">
+            <h3 className="schedule-matcher-title">Time &amp; layout preferences</h3>
+            <p className="schedule-matcher-help">
+              Describe your weekly schedule preferences (e.g. no class Friday, no 8:00
+              a.m. starts, a free block for lunch). We extract structured flags with the
+              LLM, then ask which of your generated schedules fits best.
+            </p>
+            <textarea
+              className="schedule-matcher-textarea"
+              value={scheduleTimePref}
+              onChange={(e) => setScheduleTimePref(e.target.value)}
+              placeholder='e.g. I want to avoid morning classes and keep Fridays free for club meetings.'
+              rows={3}
+              disabled={schedMatchLoading}
+            />
+            <button
+              type="button"
+              className="schedule-matcher-btn"
+              onClick={runScheduleMatcher}
+              disabled={schedMatchLoading || !scheduleTimePref.trim()}
+            >
+              {schedMatchLoading ? 'Analyzing…' : 'Pick best schedule for my time prefs'}
+            </button>
+            {schedMatchError && <p className="error-msg">{schedMatchError}</p>}
+            {schedMatchResult && (
+              <div className="schedule-matcher-outcome">
+                {formatExtractedPrefs(schedMatchResult.extracted_preferences).length > 0 && (
+                  <div className="schedule-matcher-prefs">
+                    <span className="rag-label">Model extracted:</span>
+                    {formatExtractedPrefs(schedMatchResult.extracted_preferences).map(
+                      (label) => (
+                        <span key={label} className="pref-chip">
+                          {label}
+                        </span>
+                      ),
+                    )}
+                  </div>
+                )}
+                {formatExtractedPrefs(schedMatchResult.extracted_preferences).length ===
+                  0 && (
+                  <p className="schedule-matcher-prefs-none">
+                    No specific time flags (all false); the model will still pick using your text.
+                  </p>
+                )}
+                <p className="schedule-matcher-best">
+                  <span className="rag-label">Best match:</span>{' '}
+                  <span className="best-rank-label">Schedule #{schedMatchResult.best_rank}</span>
+                </p>
+                <p className="schedule-matcher-explain">{schedMatchResult.explanation}</p>
+              </div>
+            )}
+          </div>
 
           {schedules.map(sched => {
             const calendarEvents = buildCalendarEvents(sched)

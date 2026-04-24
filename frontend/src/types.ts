@@ -56,3 +56,19 @@ export interface Schedule {
   courses: ScheduleCourse[];
   score_breakdown?: ScheduleScoreBreakdown;
 }
+
+/** Aligned with `extract_schedule_preferences` in `src/llm_routes.py`. */
+export interface ExtractedSchedulePreferences {
+  no_friday: boolean;
+  no_morning: boolean;
+  compact: boolean;
+  no_monday: boolean;
+  lunch_break: boolean;
+}
+
+export interface ScheduleMatcherResponse {
+  extracted_preferences: ExtractedSchedulePreferences;
+  best_rank: number;
+  explanation: string;
+  error?: string;
+}

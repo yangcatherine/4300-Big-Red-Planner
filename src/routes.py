@@ -539,6 +539,7 @@ def register_routes(app):
             required_ids = body.get("required_course_ids", [])
             distributions = body.get("distributions", [])
             query = body.get("query", "")
+            _llm_client = None
             if USE_LLM:
                 try:
                     from llm_routes import llm_rewrite_query
@@ -549,6 +550,7 @@ def register_routes(app):
                     rewritten_query = llm_rewrite_query(_llm_client, query)
                 except Exception as e:
                     logger.warning(f"Query rewrite failed, using original: {e}")
+                    _llm_client = None
                     rewritten_query = query
             else:
                 rewritten_query = query
@@ -820,10 +822,13 @@ def register_routes(app):
                 )
 
             llm_summary = None
-            if USE_LLM:
+            if USE_LLM and _llm_client is not None:
                 try:
                     from llm_routes import llm_generate_summary
-                    llm_summary = llm_generate_summary(_llm_client, query, rewritten_query, schedules)
+
+                    llm_summary = llm_generate_summary(
+                        _llm_client, query, rewritten_query, schedules
+                    )
                 except Exception as e:
                     logger.warning(f"LLM summary failed: {e}")
                     llm_summary = None
@@ -851,9 +856,10 @@ def register_routes(app):
             return jsonify({"error": str(e)}), 500
 
     if USE_LLM:
-        from llm_routes import register_chat_route
+        from llm_routes import register_chat_route, register_schedule_matcher_route
 
         register_chat_route(app, json_search)
+        register_schedule_matcher_route(app)
 
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
