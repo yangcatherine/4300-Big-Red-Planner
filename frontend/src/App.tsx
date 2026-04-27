@@ -324,7 +324,7 @@ function App(): JSX.Element {
           <div className="section-panel">
             <div className="section-heading-row">
               <h3 className="section-title">Distribution Preferences</h3>
-              <span className="section-meta">{selectedDists.size} selected (minimum 1)</span>
+              <span className="section-meta">{selectedDists.size} selected (min 1)</span>
             </div>
             <p className="section-help-text">
               Optional filters. Added courses are chosen to match selected distribution categories.
@@ -365,7 +365,7 @@ function App(): JSX.Element {
             <p className="section-help-text">
               Set how much each factor matters in ranking: review-match, overall rating, and difficulty.
             </p>
-            <label className="idf-toggle">
+            <label className={`dist-chip idf-toggle ${useIdf ? 'active' : ''}`}>
               <input
                 type="checkbox"
                 checked={useIdf}

@@ -1,3 +1,7 @@
+:root {
+  font-size: 17px;
+}
+
 .full-body-container {
   width: 100%;
   min-height: 100vh;
@@ -6,9 +10,9 @@
   align-items: center;
   padding: 1.25rem 0 3rem;
   background:
-    radial-gradient(circle at top left, rgba(255, 198, 204, 0.16) 0%, transparent 45%),
-    radial-gradient(circle at 90% 20%, rgba(255, 167, 176, 0.13) 0%, transparent 35%),
-    linear-gradient(170deg, #7a1014 0%, #b31b1b 45%, #8f1719 100%);
+    radial-gradient(circle at top left, rgba(255, 228, 234, 0.34) 0%, transparent 45%),
+    radial-gradient(circle at 90% 20%, rgba(255, 204, 214, 0.28) 0%, transparent 35%),
+    linear-gradient(170deg, #bf5f72 0%, #d98596 45%, #c86d82 100%);
 }
 
 .top-text {
@@ -79,9 +83,11 @@
 .section-panel {
   padding: 1.1rem 1.2rem;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  background: rgba(122, 16, 20, 0.75);
-  box-shadow: 0 14px 30px rgba(56, 0, 3, 0.22);
+  border: 1px solid rgba(255, 245, 247, 0.44);
+  background: rgba(189, 102, 118, 0.7);
+  box-shadow:
+    0 18px 34px rgba(86, 30, 42, 0.28),
+    0 3px 10px rgba(72, 24, 35, 0.18);
   backdrop-filter: blur(7px);
 }
 
@@ -95,7 +101,7 @@
 .section-title {
   font-size: 0.83rem;
   font-family: 'Kanit', sans-serif;
-  color: #ffd8dd;
+  color: #5f2231;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin: 0 0 0.82rem;
@@ -104,9 +110,9 @@
 .section-meta {
   font-family: 'Open Sans', sans-serif;
   font-size: 0.76rem;
-  color: #ffe4e8;
-  background: rgba(255, 255, 255, 0.13);
-  border: 1px solid rgba(255, 255, 255, 0.26);
+  color: #5b2230;
+  background: rgba(255, 248, 250, 0.72);
+  border: 1px solid rgba(255, 236, 241, 0.95);
   border-radius: 999px;
   padding: 0.22rem 0.62rem;
 }
@@ -115,7 +121,7 @@
   margin: -0.2rem 0 0.75rem;
   font-family: 'Open Sans', sans-serif;
   font-size: 0.78rem;
-  color: #ffe3e8;
+  color: #5d2634;
   line-height: 1.35;
 }
 
@@ -128,12 +134,15 @@
   cursor: text;
   transition: border-color 0.2s, box-shadow 0.2s;
   background: #fff;
+  box-shadow: 0 8px 18px rgba(102, 40, 54, 0.2);
 }
 
 .input-box:hover,
 .input-box:focus-within {
   border-color: rgba(255, 255, 255, 0.65);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.2),
+    0 10px 20px rgba(96, 32, 47, 0.24);
 }
 
 .input-box img {
@@ -270,13 +279,13 @@
   align-items: center;
   gap: 0.3rem;
   padding: 0.36rem 0.72rem;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 243, 246, 0.42);
   border-radius: 999px;
   font-family: 'Open Sans', sans-serif;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #ffeef0;
-  background: rgba(255, 255, 255, 0.12);
+  color: #5f2635;
+  background: rgba(255, 245, 247, 0.42);
   cursor: pointer;
   transition: all 0.18s;
   user-select: none;
@@ -292,9 +301,43 @@
 }
 
 .dist-chip.active {
-  background: #fff;
-  border-color: rgba(255, 255, 255, 0.85);
-  color: #9d101f;
+  background: #fff7f9;
+  border-color: rgba(255, 240, 244, 0.95);
+  color: #a23d52;
+}
+
+.dist-chip.idf-toggle {
+  border-radius: 10px;
+  width: fit-content;
+  margin-bottom: 0.85rem;
+  gap: 0.45rem;
+}
+
+.dist-chip.idf-toggle input[type='checkbox'] {
+  display: inline-grid;
+  place-content: center;
+  appearance: none;
+  width: 0.9rem;
+  height: 0.9rem;
+  margin: 0;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  background: transparent;
+  transition: background-color 0.18s, border-color 0.18s;
+}
+
+.dist-chip.idf-toggle input[type='checkbox']::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 1px;
+  background: currentColor;
+  transform: scale(0);
+  transition: transform 0.15s ease-in-out;
+}
+
+.dist-chip.idf-toggle input[type='checkbox']:checked::before {
+  transform: scale(1);
 }
 
 .weights-grid {
@@ -310,7 +353,7 @@
   margin-left: calc(120px + 0.7rem);
   font-family: 'Montserrat', sans-serif;
   font-size: 0.75rem;
-  color: #ffe7ea;
+  color: #5f2635;
   font-weight: 600;
 }
 
@@ -325,7 +368,7 @@
   min-width: 120px;
   font-size: 0.79rem;
   font-family: 'Montserrat', sans-serif;
-  color: #ffe7ea;
+  color: #5f2635;
   font-weight: 600;
 }
 
@@ -359,7 +402,7 @@
 .stat-label {
   font-family: 'Montserrat', sans-serif;
   font-size: 0.72rem;
-  color: #ffe3e8;
+  color: #5f2635;
   text-transform: uppercase;
 }
 
@@ -378,8 +421,8 @@
   font-weight: 600;
   border-radius: 14px;
   border: 1px solid #fff;
-  background: linear-gradient(110deg, #ffffff 0%, #ffeef1 100%);
-  color: #9d101f;
+  background: linear-gradient(110deg, #fff9fb 0%, #ffe8ee 100%);
+  color: #a13e53;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.2s, filter 0.2s;
 }
@@ -396,11 +439,34 @@
 }
 
 .error-msg {
-  color: #ffe2e7;
+  color: #4f1f2b;
   font-family: 'Montserrat', sans-serif;
   font-size: 0.9rem;
   text-align: center;
   margin: 0;
+}
+
+.results-heading,
+.schedule-rank,
+.schedule-credits,
+.score-breakdown-title,
+.score-breakdown-text,
+.score-formula-grid,
+.course-score-chip,
+.calendar-day-label,
+.sched-course-id,
+.sched-course-title,
+.sched-course-meta,
+.meeting-tag,
+.rag-label,
+.rag-original,
+.rag-rewritten,
+.schedule-matcher-title,
+.schedule-matcher-help,
+.schedule-matcher-best,
+.schedule-matcher-explain,
+.pref-chip {
+  text-shadow: 0 1px 2px rgba(63, 20, 31, 0.45);
 }
 
 .results-container {
@@ -413,12 +479,15 @@
 .empty-results-card {
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(122, 16, 20, 0.85);
+  background: rgba(184, 97, 113, 0.74);
   color: #fff3f5;
   font-family: 'Open Sans', sans-serif;
   font-size: 0.9rem;
   line-height: 1.45;
   padding: 0.95rem 1.1rem;
+  box-shadow:
+    0 14px 28px rgba(86, 30, 42, 0.25),
+    0 2px 8px rgba(72, 24, 35, 0.16);
 }
 
 .results-heading {
@@ -429,11 +498,13 @@
 }
 
 .schedule-card {
-  background: rgba(122, 16, 20, 0.9);
+  background: rgba(181, 92, 109, 0.8);
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.24);
   overflow: hidden;
-  box-shadow: 0 12px 26px rgba(51, 0, 6, 0.24);
+  box-shadow:
+    0 16px 32px rgba(86, 30, 42, 0.28),
+    0 3px 10px rgba(72, 24, 35, 0.2);
 }
 
 .schedule-header {
@@ -441,7 +512,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.86rem 1.2rem;
-  background: rgba(74, 0, 8, 0.28);
+  background: rgba(145, 57, 73, 0.28);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -521,7 +592,7 @@
   margin: 0.75rem 1.2rem 0.9rem;
   border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 14px;
-  background: rgba(86, 10, 14, 0.42);
+  background: rgba(156, 72, 88, 0.3);
   display: grid;
   grid-template-columns: 56px 1fr;
   min-height: 520px;
@@ -816,12 +887,13 @@
   padding: 0.6rem 0.75rem;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(132, 61, 77, 0.24);
   color: #fff;
   font-size: 0.88rem;
   font-family: inherit;
   resize: vertical;
   min-height: 4.5rem;
+  box-shadow: 0 8px 16px rgba(86, 30, 42, 0.22);
 }
 
 .schedule-matcher-textarea::placeholder {
