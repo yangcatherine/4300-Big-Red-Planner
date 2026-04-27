@@ -314,6 +314,16 @@
   font-weight: 600;
 }
 
+.idf-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.55rem;
+  color: #ffe7ea;
+  font-family: 'Open Sans', sans-serif;
+  font-size: 0.8rem;
+}
+
 .weight-control {
   display: flex;
   flex-direction: row;
@@ -486,6 +496,85 @@
   font-size: 0.72rem;
   font-weight: 700;
   padding: 0.18rem 0.48rem;
+}
+
+.latent-panel {
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.latent-toggle-btn {
+  margin-top: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-radius: 9px;
+  padding: 0.3rem 0.62rem;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.latent-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.latent-title {
+  margin: 0;
+  color: #fff;
+  font-family: 'Kanit', sans-serif;
+  font-size: 0.85rem;
+}
+
+.latent-help {
+  margin: 0.28rem 0 0.55rem;
+  color: #ffe6ea;
+  font-family: 'Open Sans', sans-serif;
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
+.latent-group {
+  margin-top: 0.45rem;
+}
+
+.latent-group-title {
+  margin: 0 0 0.28rem;
+  color: #ffdce1;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.71rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.latent-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.latent-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffeef1;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.71rem;
+  font-weight: 700;
+  padding: 0.24rem 0.58rem;
+}
+
+.latent-chip-positive {
+  background: rgba(80, 173, 129, 0.2);
+}
+
+.latent-chip-negative {
+  background: rgba(219, 117, 132, 0.22);
 }
 
 .calendar-toggle-btn {

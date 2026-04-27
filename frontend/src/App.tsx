@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import SearchIcon from './assets/mag.png'
-import { CourseSuggestion, Schedule } from './types'
+import { CourseSuggestion, LatentDimensionContribution, Schedule } from './types'
 
 const ALL_DISTRIBUTIONS = [
   'ALC', 'BIO', 'ETM', 'FLOPI', 'GLC',
@@ -49,6 +49,23 @@ const hashCourseId = (courseId: string): number => {
   return hash
 }
 
+const formatLatentTerms = (terms: string[]): string =>
+  terms.length > 0 ? terms.join(', ') : 'No dominant terms'
+
+const formatDimensionChip = (
+  dim: LatentDimensionContribution,
+  sign: '+' | '-',
+): string => {
+  const preferredTerms = sign === '+'
+    ? dim.top_positive_terms
+    : dim.top_negative_terms
+  const fallbackTerms = sign === '+'
+    ? dim.top_negative_terms
+    : dim.top_positive_terms
+  const terms = (preferredTerms.length > 0 ? preferredTerms : fallbackTerms).slice(0, 3)
+  return `D${dim.dimension + 1} (${sign}): ${formatLatentTerms(terms)}`
+}
+
 function App(): JSX.Element {
   // Course input
   const [courseQuery, setCourseQuery] = useState('')
@@ -79,6 +96,7 @@ function App(): JSX.Element {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [expandedCalendars, setExpandedCalendars] = useState<Set<number>>(new Set())
+  const [expandedLatentDetails, setExpandedLatentDetails] = useState<Set<number>>(new Set())
 
   // Close suggestions on outside click
   useEffect(() => {
@@ -137,6 +155,7 @@ function App(): JSX.Element {
     setLoading(true)
     setSchedules([])
     setExpandedCalendars(new Set())
+    setExpandedLatentDetails(new Set())
 
     const resp = await fetch('/api/schedules', {
       method: 'POST',
@@ -169,6 +188,15 @@ function App(): JSX.Element {
 
   const toggleCalendar = (rank: number) => {
     setExpandedCalendars(prev => {
+      const next = new Set(prev)
+      if (next.has(rank)) next.delete(rank)
+      else next.add(rank)
+      return next
+    })
+  }
+
+  const toggleLatentDetails = (rank: number) => {
+    setExpandedLatentDetails(prev => {
       const next = new Set(prev)
       if (next.has(rank)) next.delete(rank)
       else next.add(rank)
@@ -399,6 +427,15 @@ function App(): JSX.Element {
 
           {schedules.map(sched => {
             const calendarEvents = buildCalendarEvents(sched)
+            const latentExplainability = sched.score_breakdown?.latent_explainability ?? null
+            const hasLatentExplainability = (
+              sched.score_breakdown?.search_method === 'svd' &&
+              !!latentExplainability &&
+              (
+                latentExplainability.positive_dimensions.length > 0 ||
+                latentExplainability.negative_dimensions.length > 0
+              )
+            )
             const latestEnd = calendarEvents.length > 0
               ? Math.max(...calendarEvents.map(e => e.endMin))
               : DEFAULT_CAL_END_MIN
@@ -455,6 +492,55 @@ function App(): JSX.Element {
                         </span>
                       ))}
                     </div>
+
+                    {hasLatentExplainability && (
+                      <button
+                        className="latent-toggle-btn"
+                        onClick={() => toggleLatentDetails(sched.rank)}
+                      >
+                        {expandedLatentDetails.has(sched.rank)
+                          ? 'Hide latent dimensions'
+                          : 'Show latent dimensions'}
+                      </button>
+                    )}
+
+                    {hasLatentExplainability && latentExplainability &&
+                      expandedLatentDetails.has(sched.rank) && (
+                        <div className="latent-panel">
+                          <p className="latent-title">Latent dimensions matched</p>
+                          {latentExplainability.positive_dimensions.length > 0 && (
+                            <div className="latent-group">
+                              <p className="latent-group-title">Top positive contributors</p>
+                              <div className="latent-chip-list">
+                                {latentExplainability.positive_dimensions.map(dim => (
+                                  <span
+                                    key={`pos-${dim.dimension}`}
+                                    className="latent-chip latent-chip-positive"
+                                  >
+                                    {formatDimensionChip(dim, '+')}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {latentExplainability.negative_dimensions.length > 0 && (
+                            <div className="latent-group">
+                              <p className="latent-group-title">Top negative contributors</p>
+                              <div className="latent-chip-list">
+                                {latentExplainability.negative_dimensions.map(dim => (
+                                  <span
+                                    key={`neg-${dim.dimension}`}
+                                    className="latent-chip latent-chip-negative"
+                                  >
+                                    {formatDimensionChip(dim, '-')}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                   </div>
                 )}
 

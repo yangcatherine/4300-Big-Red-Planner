@@ -29,7 +29,22 @@ export interface ScheduleCourseScoreBreakdown {
   explanation: string;
 }
 
+export interface LatentDimensionContribution {
+  dimension: number;
+  query_activation: number;
+  schedule_activation: number;
+  contribution: number;
+  top_positive_terms: string[];
+  top_negative_terms: string[];
+}
+
+export interface LatentExplainability {
+  positive_dimensions: LatentDimensionContribution[];
+  negative_dimensions: LatentDimensionContribution[];
+}
+
 export interface ScheduleScoreBreakdown {
+  search_method?: "svd" | "tfidf";
   weights: {
     similarity: number;
     rating: number;
@@ -47,6 +62,7 @@ export interface ScheduleScoreBreakdown {
   };
   explanation: string;
   course_breakdown: ScheduleCourseScoreBreakdown[];
+  latent_explainability?: LatentExplainability | null;
 }
 
 export interface Schedule {
